@@ -1,105 +1,120 @@
 # Blindspots
 
-**Do mixed-model agent teams fix more bugs than a single model?**
+**A multi-agent coding system that fixes bugs in GitHub repositories.**
 
-Blindspots is a multi-agent coding system that resolves real GitHub issues from [SWE-bench](https://www.swebench.com/). Its agents run on models from different providers, and the project measures one question honestly: **at the same cost, does a team of *different* models beat the best single model?**
+Label an issue, and Blindspots reads the repo, finds the bug, writes a fix, tests it, has a second agent review it, and opens a pull request explaining what was wrong. Each agent on the team runs on the model that performs best at its specific job, drawn from different AI providers.
 
-> 🚧 **Status: early development.** Results below will be filled in as experiments run. Every number in this repo will be reproducible from the code.
+> 🚧 **Status: early development.** Features and results below will be filled in as they're built. Every number in this repo will be reproducible from the code.
 
 ---
 
-## The idea
+## Why "Blindspots"?
 
-Every language model has blind spots: kinds of mistakes it keeps making and can't see in its own work. When a model reviews its own patch, it tends to miss the same errors it made writing it.
+Every AI model has blind spots: kinds of mistakes it keeps making and can't see in its own work. A model reviewing its own patch tends to miss the same errors it made writing it.
 
-Models from different providers are trained differently, so their blind spots don't fully overlap. Blindspots tests whether that diversity is useful in practice: if one model writes a patch and a *different* model reviews it, are more bugs caught and fixed?
-
-Rather than assigning roles by reputation ("model X is good at code"), Blindspots **measures** each model on each role first, then builds teams from the measurements.
+Blindspots builds its agent team from models made by different providers, so one agent's blind spots are covered by another's. Which model gets which role is decided by measurement, not reputation.
 
 ## How it works
 
-A bug fix is split into five roles, each handled by an agent:
+```
+GitHub issue labelled "blindspots-fix"
+        │
+        ▼
+ Fresh Docker sandbox with the repo cloned
+        │
+        ▼
+ Localiser ──► Planner ──► Coder ──► Tester ──► Reviewer
+                             ▲                     │
+                             └──── feedback ◄──────┘
+        │
+        ▼
+ Pull request: fix + new test + plain-English explanation
+```
 
-| Role | Job |
+| Agent | Job |
 | --- | --- |
-| **Localiser** | Find the files and functions where the bug lives |
-| **Planner** | Write a short plan for the fix |
-| **Coder** | Write the patch |
-| **Tester** | Write a test that reproduces the bug |
-| **Reviewer** | Critique the patch and send it back if it's wrong |
+| **Localiser** | Reads the issue and codebase, finds the files and functions involved |
+| **Planner** | Writes a short plan for the fix |
+| **Coder** | Writes the patch |
+| **Tester** | Writes a test that reproduces the bug, then runs the test suite |
+| **Reviewer** | Checks the patch and sends it back with feedback if it's wrong |
 
-Each role can be assigned to any model from any supported provider. All agent code runs inside disposable Docker containers.
+The coder and reviewer loop for a limited number of rounds. If no fix passes review, Blindspots comments on the issue with what it found instead of opening a bad PR.
 
-## The experiment
+## Two modes
 
-Four configurations, run on the same tasks with the **same budget per task**:
+**Live mode** — install the Blindspots GitHub App on a repository you own. Labelling an issue triggers a run, and the result arrives as a pull request.
 
-1. **Solo** — the best single model does everything alone
-2. **Mono-team** — one model plays all five roles
-3. **Mixed team** — each role uses the model that scored best on it
-4. **Cheap mix** — low-cost models everywhere except one stronger coder
+**Benchmark mode** — runs the same agent team on a fixed sample of tasks from [SWE-bench](https://www.swebench.com/), a standard benchmark of real bugs from popular open-source Python projects, to measure how often it actually succeeds.
 
-### Metrics
+## Architecture
 
-- **Resolve rate** — share of issues fixed (patch passes the task's tests)
-- **Cost per resolved issue** — API spend divided by issues fixed
-- **Tokens and latency per task**
-- **Failure analysis** — which role or hand-off caused each failure
+Blindspots runs end to end on AWS.
 
-A negative result ("mixing models didn't help, and here's why") is a valid outcome and will be reported as such.
+| Component | Service |
+| --- | --- |
+| Receives GitHub webhooks | API Gateway + Lambda |
+| Job queue | SQS |
+| Runs the agent team in Docker | EC2 worker |
+| AI models | Amazon Bedrock + Google Gemini API |
+| Logs, patches, agent transcripts | S3 |
+| Job and cost tracking | DynamoDB |
+| Secrets | SSM Parameter Store |
+| Monitoring and budget alerts | CloudWatch + AWS Budgets |
+| Infrastructure as code | Terraform |
+| CI/CD | GitHub Actions |
+
+All generated code runs inside disposable, isolated containers with no access to credentials.
 
 ## Results
 
-*Coming soon.* This table will be filled in from the experiment runs.
+*Coming soon.*
 
-| Configuration | Resolve rate | Cost / resolved issue | Notes |
-| --- | --- | --- | --- |
-| Solo | — | — | |
-| Mono-team | — | — | |
-| Mixed team | — | — | |
-| Cheap mix | — | — | |
+| Setup | Bugs fixed (SWE-bench sample) | Cost per bug fixed |
+| --- | --- | --- |
+| Single model doing every role | — | — |
+| Blindspots mixed-model team | — | — |
 
-## Built to be cheap
-
-Evaluating agents on SWE-bench can get expensive quickly. Blindspots is designed to run on a student budget:
-
-- A fixed sample of 50–100 tasks from SWE-bench Lite / Verified, not the full set
-- Low-cost model tiers for most roles
-- Every model call cached, so reruns cost nothing
-- Free tiers used during development; full comparisons only at milestones
-- Cost tracked per call, per role, and per task
+The headline question: does the mixed team fix more bugs per dollar than one model doing everything? If it doesn't, that will be reported here too.
 
 ## Project structure (planned)
 
 ```
 blindspots/
-├── agents/        # role definitions and prompts
+├── agents/        # the five agents and their prompts
 ├── providers/     # one adapter per model provider
-├── orchestrator/  # hands tasks between roles
+├── orchestrator/  # passes work between agents
 ├── sandbox/       # Docker execution environment
-├── eval/          # SWE-bench harness, metrics, cost tracking
-├── experiments/   # configs for each experiment run
-├── decisions/     # architecture decision records (ADRs)
-└── results/       # raw results and analysis
+├── github_app/    # webhook handling and pull request creation
+├── benchmark/     # SWE-bench runner and metrics
+├── infra/         # Terraform for AWS
+├── dashboard/     # job viewer
+└── decisions/     # architecture decision records
 ```
 
 ## Design decisions
 
-Every significant technical choice is documented in [`decisions/`](decisions/) as an architecture decision record: what was chosen, what the alternatives were, why this option won, and what would make it the wrong call.
+Every significant technical choice is documented in [`decisions/`](decisions/): what was chosen, the alternatives considered, why this option won, and what would make it the wrong call.
 
 ## Roadmap
 
-- [ ] Sandbox and single-agent baseline running on a small task sample
-- [ ] Provider adapters with cost tracking and caching
-- [ ] Five-role orchestrator
-- [ ] Per-role model evaluation
-- [ ] Full four-configuration comparison
-- [ ] Failure analysis and write-up
+- [ ] Single agent fixes one SWE-bench task inside a Docker sandbox
+- [ ] Five-agent pipeline with the coder–reviewer loop
+- [ ] Provider adapters with cost tracking and response caching
+- [ ] Per-role model evaluation to assign models to agents
+- [ ] Benchmark run on a SWE-bench sample
+- [ ] GitHub App: issue label → pull request
+- [ ] AWS deployment with Terraform
+- [ ] Job dashboard
 - [ ] Demo video
 
 ## Getting started
 
 *Setup instructions will be added once the first working version lands.*
+
+## Responsible use
+
+Only install Blindspots on repositories you own or have permission to modify. Every pull request it opens is a suggestion for a human to review, never merged automatically.
 
 ## Author
 
