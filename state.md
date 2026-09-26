@@ -47,9 +47,10 @@ benchmark has been run yet.
 
 ### Open
 
-- **Record the spike** in `results.md` (entry #0) and the harness-version
-  pin in `decisions.md`. Malay to write these.
-- **Week 1 starts 1 October** — see `october-plan.md`.
+- ~~Record the spike~~ **done** — `results.md` entry #0, ADR-0010
+  (pin `swebench==5.0.2`, locate reports by search).
+- **Week 1 started early, 2026-09-26.** Step 1 (harness in WSL2,
+  Docker confirmed) in progress — see `october-plan.md`.
 
 ---
 
