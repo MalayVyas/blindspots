@@ -57,7 +57,7 @@ jobs:
         run: |
           nohup bash -c 'while true; do df -B1 --output=used / | tail -1 >> metrics/disk_samples.txt; sleep 2; done' >/dev/null 2>&1 &
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
@@ -121,15 +121,23 @@ jobs:
           t_total = None
           import time
           t_total = int(time.time()) - int(rd("t_start.txt"))
-          results = pathlib.Path("logs/evaluation") / os.environ["RUN_ID"] / "results.json"
-          res = json.loads(results.read_text()) if results.exists() else {}
-          resolved = os.environ["INSTANCE_ID"] in res.get("resolved_ids", [])
+          # Read the per-task report the harness writes, wherever this
+          # harness version puts it (5.0.2 on PyPI: logs/run_evaluation/...).
+          # Exactly one must exist; zero or several means we cannot trust it.
+          iid = os.environ["INSTANCE_ID"]
+          reports = [p for p in pathlib.Path("logs").rglob(f"{iid}/report.json")
+                     if os.environ["RUN_ID"] in p.parts]
+          if len(reports) != 1:
+              raise SystemExit(f"Expected 1 report.json for {iid}, found {len(reports)}: {reports}")
+          report = json.loads(reports[0].read_text())[iid]
+          resolved = report["resolved"] is True
           GB = 1e9
           out = {
               "instance_id": os.environ["INSTANCE_ID"],
               "swebench_version": os.environ["SWEBENCH_VERSION"],
               "free_disk": "${{ inputs.free_disk }}" == "true",
               "resolved": resolved,
+              "report_path": str(reports[0]),
               "disk_total_gb": round(size / GB, 2),
               "disk_avail_before_gb": round(base_avail / GB, 2),
               "disk_peak_added_gb": round((peak - base_used) / GB, 2),
@@ -152,7 +160,7 @@ jobs:
 
       - name: Upload metrics and harness logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: spike-${{ inputs.instance_id }}-${{ github.run_id }}
           path: |
