@@ -1,0 +1,29 @@
+# Private planning documents — candid self-assessment and personal
+# budget figures. Kept local; not part of the public portfolio repo.
+risks.md
+solutions.md
+budget.md
+
+# Docker Desktop's disk image, if it is ever pointed inside this
+# folder. 15 GB of virtual disk must never reach git.
+DockerDesktopWSL/
+*.vhdx
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+
+# Environment and secrets
+.env
+.env.*
+*.pem
+*.key
+
+# Run artefacts
+runs/
+logs/
+*.log
