@@ -24,7 +24,8 @@ options considered), **`claude/budget.md`** (costing).
 
 **Week 0 is essentially complete.** Every hardware and account unknown
 has been resolved into a measured number. No code has been written
-yet. No model has been called yet. No benchmark has been run yet.
+yet beyond the spike workflow. No model has been called yet. No
+benchmark has been run yet.
 
 ### Done
 
@@ -33,32 +34,49 @@ yet. No model has been called yet. No benchmark has been run yet.
 | Machine measured | 16 cores, 19 GiB RAM in WSL2, 8 GiB swap, ~429 GB free on E: |
 | WSL2 memory raised | 15 GiB → 19 GiB via `.wslconfig`, verified after restart |
 | Docker image store | Moved off C: to E:, out of the repo folder |
-| AWS | Upgraded to the Paid plan (credits were already spent) |
+| AWS | Upgraded to the Paid plan (credits were already spent); $5/month Budgets alarm confirmed 2026-09-26 |
 | Azure for Students | $100 available, reserved for the premium comparison arm |
 | GitHub Student Developer Pack | Claimed |
 | DeepSeek API | Account open |
 | Claude cloud-session credit | $100, **expires 5 November 2026** |
 | Repository | `github.com/MalayVyas/blindspots`, public, remote configured |
 | Documents | README rewritten, nine ADRs written, measurement definitions fixed |
+| Git | Local `main` committed and pushed; matches `origin/main` (checked 2026-09-26 by reading `.git` refs) |
+| Spike workflow | `.github/workflows/spike.yml` written 2026-09-26, linted, **not yet committed or run** |
 
 ### Open
 
-- **Local git commit and push.** Local `main` has no commits; the
-  rewritten README and the ADRs exist only on disk. GitHub still shows
-  the older versions from a browser upload. Blocked on nothing —
-  `git reset origin/main`, `git add .`, commit, push.
-- **AWS Budgets alarm at $5/month.** Asked for twice, never confirmed.
-  With no credit balance acting as a ceiling this matters.
-- **Git authentication on Windows.** Never got working; the repo was
-  populated by browser upload. `winget install --id GitHub.cli` then
-  `gh auth login` is the recommended fix. Needed before any pull
-  request workflow.
+- **Git auth inside WSL.** Push from WSL failed (password auth). Fix: `gh auth login` in WSL, then `gh auth setup-git`.
 - **The Week 0 spike** — the last item, and the first interesting one.
   See below.
 
 ---
 
 ## The next piece of work
+
+**Status 2026-09-26:** the workflow is written (`.github/workflows/spike.yml`).
+Commit it from the terminal, push, then Actions tab → spike → Run
+workflow. Run it twice: once with `free_disk` off (the baseline
+answer) and once on (the fallback). The job summary prints the
+numbers; paste them into `results.md`.
+
+Findings made while writing it:
+
+- **SWE-bench harness 5.x needs `image`, `eval_script` and
+  `log_parser` columns** [PRIMARY — swebench 5.0.2 source,
+  `harness/utils.py`]. `SWE-bench/SWE-bench_Verified` has them;
+  the Verified Mini dataset (`MariusHobbhahn/swe-bench-verified-mini`)
+  does not [PRIMARY — Hugging Face dataset viewer]. So Mini is used as
+  a **list of IDs** passed to `--instance_ids` against the Verified
+  dataset, not as `--dataset_name`. Pin `swebench==5.0.2`.
+- The spike task is `django__django-11099`, chosen from Verified and
+  **outside** Mini, so the held-out set is not touched. The workflow
+  refuses to run on a Mini ID.
+- Its image is 1.07 GB compressed on Docker Hub [PRIMARY — Docker Hub
+  API]; uncompressed size is what the spike measures.
+- A 50-task matrix runs each task on its own runner, so the per-job
+  disk figure is the one that matters, not 50× it [JUDGEMENT].
+
 
 A GitHub Actions workflow that pulls one SWE-bench environment image,
 checks out the task's repo at the base commit, applies the **gold**
@@ -126,12 +144,9 @@ start, expensive to reconstruct.
 
 ## Stale material — do not act on it
 
-**The Project instructions in Claude are out of date** and describe
-the original plan. They still say: EC2 worker, Bedrock as the model
-gateway, "$200 credits", GitHub App live mode in February, dashboard
-in March, "the agent is the product; SWE-bench proves it works".
-Replacement text was supplied on 2026-09-26; until Malay pastes it in,
-treat `decisions.md` as authoritative wherever the two disagree.
+**Project instructions** were replaced with the current text by
+2026-09-26 (they now match `decisions.md`). If they ever disagree,
+`decisions.md` wins.
 
 **Earlier cost figures.** A first pass at costing used invented token
 assumptions and third-party pricing pages, some of which listed

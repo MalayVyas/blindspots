@@ -1,0 +1,161 @@
+# Week 0 spike — can a free GitHub-hosted runner hold and run one
+# SWE-bench task?
+#
+# Pulls one prebuilt SWE-bench environment image, applies the GOLD patch
+# with the official harness, runs FAIL_TO_PASS and PASS_TO_PASS, and
+# records the two numbers the spike exists for:
+#   1. peak disk used on the runner
+#   2. wall-clock, split into image pull and evaluation
+#
+# No model is called. Cost: $0 (standard runners are free on public repos).
+#
+# Run it from the Actions tab -> "spike" -> "Run workflow".
+
+name: spike
+
+on:
+  workflow_dispatch:
+    inputs:
+      instance_id:
+        description: "SWE-bench Verified task. Must NOT be in Verified Mini (held-out set)."
+        default: "django__django-11099"
+        required: true
+      free_disk:
+        description: "Delete preinstalled toolchains first (measures the fallback, not the baseline)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  SWEBENCH_VERSION: "5.0.2"          # pinned; the harness changed shape in 5.x
+  DATASET: "SWE-bench/SWE-bench_Verified"
+  MINI_DATASET: "MariusHobbhahn/swe-bench-verified-mini"
+  INSTANCE_ID: ${{ inputs.instance_id }}
+  RUN_ID: spike-${{ github.run_id }}
+
+jobs:
+  spike:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Record starting disk
+        run: |
+          mkdir -p metrics
+          df -B1 --output=size,used,avail / | tail -1 | tee metrics/disk_start.txt
+          date +%s > metrics/t_start.txt
+
+      - name: Optionally free preinstalled toolchains
+        if: ${{ inputs.free_disk }}
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          docker image prune -af
+          df -B1 --output=size,used,avail / | tail -1 | tee metrics/disk_after_free.txt
+
+      - name: Start disk sampler (every 2 s, for the peak)
+        run: |
+          nohup bash -c 'while true; do df -B1 --output=used / | tail -1 >> metrics/disk_samples.txt; sleep 2; done' >/dev/null 2>&1 &
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install harness
+        run: pip install "swebench==${SWEBENCH_VERSION}"
+
+      - name: Guard — task is in Verified and NOT in the held-out Mini set
+        id: guard
+        run: |
+          python - <<'PY'
+          import json, os
+          from datasets import load_dataset
+          iid = os.environ["INSTANCE_ID"]
+          mini = set(load_dataset(os.environ["MINI_DATASET"], split="test")["instance_id"])
+          if iid in mini:
+              raise SystemExit(f"{iid} is in Verified Mini. Pick a task outside the held-out set.")
+          v = load_dataset(os.environ["DATASET"], split="test")
+          row = next((r for r in v if r["instance_id"] == iid), None)
+          if row is None:
+              raise SystemExit(f"{iid} not found in {os.environ['DATASET']}")
+          info = {"instance_id": iid, "image": row["image"],
+                  "n_fail_to_pass": len(json.loads(row["FAIL_TO_PASS"])) if isinstance(row["FAIL_TO_PASS"], str) else len(row["FAIL_TO_PASS"]),
+                  "n_pass_to_pass": len(json.loads(row["PASS_TO_PASS"])) if isinstance(row["PASS_TO_PASS"], str) else len(row["PASS_TO_PASS"])}
+          print(info)
+          json.dump(info, open("metrics/task.json", "w"))
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"image={row['image']}\n")
+          PY
+
+      - name: Pull image (timed separately)
+        run: |
+          t0=$(date +%s)
+          docker pull "${{ steps.guard.outputs.image }}"
+          echo $(( $(date +%s) - t0 )) > metrics/pull_seconds.txt
+          docker image inspect "${{ steps.guard.outputs.image }}" --format '{{.Size}}' > metrics/image_bytes.txt
+          df -B1 --output=used / | tail -1 > metrics/disk_after_pull.txt
+
+      - name: Evaluate gold patch
+        run: |
+          t0=$(date +%s)
+          python -m swebench.harness.run_evaluation \
+            --dataset_name "$DATASET" \
+            --instance_ids "$INSTANCE_ID" \
+            --predictions_path gold \
+            --max_workers 1 \
+            --run_id "$RUN_ID"
+          echo $(( $(date +%s) - t0 )) > metrics/eval_seconds.txt
+
+      - name: Summarise and assert resolved
+        if: always()
+        run: |
+          python - <<'PY'
+          import json, os, pathlib
+          m = pathlib.Path("metrics")
+          rd = lambda f: (m / f).read_text().strip() if (m / f).exists() else None
+          size, used0, avail0 = map(int, rd("disk_start.txt").split())
+          samples = [int(x) for x in (m / "disk_samples.txt").read_text().split()] if (m / "disk_samples.txt").exists() else [used0]
+          base_used = int(rd("disk_after_free.txt").split()[1]) if rd("disk_after_free.txt") else used0
+          base_avail = int(rd("disk_after_free.txt").split()[2]) if rd("disk_after_free.txt") else avail0
+          peak = max(samples)
+          t_total = None
+          import time
+          t_total = int(time.time()) - int(rd("t_start.txt"))
+          results = pathlib.Path("logs/evaluation") / os.environ["RUN_ID"] / "results.json"
+          res = json.loads(results.read_text()) if results.exists() else {}
+          resolved = os.environ["INSTANCE_ID"] in res.get("resolved_ids", [])
+          GB = 1e9
+          out = {
+              "instance_id": os.environ["INSTANCE_ID"],
+              "swebench_version": os.environ["SWEBENCH_VERSION"],
+              "free_disk": "${{ inputs.free_disk }}" == "true",
+              "resolved": resolved,
+              "disk_total_gb": round(size / GB, 2),
+              "disk_avail_before_gb": round(base_avail / GB, 2),
+              "disk_peak_added_gb": round((peak - base_used) / GB, 2),
+              "headroom_at_peak_gb": round((base_avail - (peak - base_used)) / GB, 2),
+              "image_uncompressed_gb": round(int(rd("image_bytes.txt")) / GB, 2) if rd("image_bytes.txt") else None,
+              "pull_seconds": int(rd("pull_seconds.txt")) if rd("pull_seconds.txt") else None,
+              "eval_seconds": int(rd("eval_seconds.txt")) if rd("eval_seconds.txt") else None,
+              "job_seconds_to_here": t_total,
+              "task": json.loads(rd("task.json")) if rd("task.json") else None,
+          }
+          (m / "spike.json").write_text(json.dumps(out, indent=2))
+          lines = ["## Spike result", "", "| metric | value |", "| --- | --- |"]
+          lines += [f"| {k} | {v} |" for k, v in out.items() if k != "task"]
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
+              f.write("\n".join(lines) + "\n")
+          print(json.dumps(out, indent=2))
+          if not resolved:
+              raise SystemExit("Gold patch did NOT resolve — harness or environment problem.")
+          PY
+
+      - name: Upload metrics and harness logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: spike-${{ inputs.instance_id }}-${{ github.run_id }}
+          path: |
+            metrics/
+            logs/
+          retention-days: 90
