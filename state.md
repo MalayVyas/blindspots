@@ -22,8 +22,8 @@ options considered), **`claude/budget.md`** (costing).
 
 ## Where the project is
 
-**Week 0 is essentially complete.** Every hardware and account unknown
-has been resolved into a measured number. No code has been written
+**Week 0 is complete (2026-09-26).** Every hardware and account unknown
+has been resolved, and the spike is green. No code has been written
 yet beyond the spike workflow. No model has been called yet. No
 benchmark has been run yet.
 
@@ -42,59 +42,54 @@ benchmark has been run yet.
 | Repository | `github.com/MalayVyas/blindspots`, public, remote configured |
 | Documents | README rewritten, nine ADRs written, measurement definitions fixed |
 | Git | Local `main` committed and pushed; matches `origin/main` (checked 2026-09-26 by reading `.git` refs) |
-| Spike workflow | `.github/workflows/spike.yml` written 2026-09-26, linted, **not yet committed or run** |
+| Spike workflow | `.github/workflows/spike.yml` — **green**, run 36218467955 (github.com/MalayVyas/blindspots/actions/runs/36218467955) |
+| Git auth in WSL | `gh auth login` + `gh auth setup-git` working; pushes from WSL succeed |
 
 ### Open
 
-- **Git auth inside WSL.** Push from WSL failed (password auth). Fix: `gh auth login` in WSL, then `gh auth setup-git`.
-- **The Week 0 spike** — the last item, and the first interesting one.
-  See below.
+- **Record the spike** in `results.md` (entry #0) and the harness-version
+  pin in `decisions.md`. Malay to write these.
+- **Week 1 starts 1 October** — see `october-plan.md`.
 
 ---
 
-## The next piece of work
+## Spike result (Week 0, done)
 
-**Status 2026-09-26:** the workflow is written (`.github/workflows/spike.yml`).
-Commit it from the terminal, push, then Actions tab → spike → Run
-workflow. Run it twice: once with `free_disk` off (the baseline
-answer) and once on (the fallback). The job summary prints the
-numbers; paste them into `results.md`.
+Question: can a free GitHub-hosted runner hold and run one SWE-bench
+task? **Yes, with large margin.**
 
-Findings made while writing it:
+Run 36217970815, `django__django-11099`, gold patch [MEASURED, one run]:
 
-- **SWE-bench harness 5.x needs `image`, `eval_script` and
-  `log_parser` columns** [PRIMARY — swebench 5.0.2 source,
-  `harness/utils.py`]. `SWE-bench/SWE-bench_Verified` has them;
-  the Verified Mini dataset (`MariusHobbhahn/swe-bench-verified-mini`)
-  does not [PRIMARY — Hugging Face dataset viewer]. So Mini is used as
-  a **list of IDs** passed to `--instance_ids` against the Verified
-  dataset, not as `--dataset_name`. Pin `swebench==5.0.2`.
-- The spike task is `django__django-11099`, chosen from Verified and
-  **outside** Mini, so the held-out set is not touched. The workflow
-  refuses to run on a Mini ID.
-- Its image is 1.07 GB compressed on Docker Hub [PRIMARY — Docker Hub
-  API]; uncompressed size is what the spike measures.
-- A 50-task matrix runs each task on its own runner, so the per-job
-  disk figure is the one that matters, not 50× it [JUDGEMENT].
+| | |
+| --- | --- |
+| Runner disk total / free at start | 154.9 GB / 92.3 GB |
+| Peak disk added by the task | 3.91 GB |
+| Image, uncompressed | 2.87 GB |
+| Image pull | 35 s |
+| Harness evaluation | 27 s |
+| Job to summary | 83 s |
+| Harness verdict | resolved: 3/3 FAIL_TO_PASS, 19/19 PASS_TO_PASS |
 
+That run went red only because the summary step read the wrong report
+path; the harness itself resolved the task. Run 36218467955 with the
+fixed step is green.
 
-A GitHub Actions workflow that pulls one SWE-bench environment image,
-checks out the task's repo at the base commit, applies the **gold**
-patch, and runs the FAIL_TO_PASS and PASS_TO_PASS tests to green.
-Roughly three hours.
+- GitHub documents 14 GB of SSD [PRIMARY]; the runner actually had 92 GB
+  free. Treat 14 GB as the guaranteed floor, not the real figure.
+- The `free_disk` fallback run is **not needed** [JUDGEMENT].
+- Caveat: one light Django task. Week 1's five dev tasks give the range.
 
-It exists to answer one question: can a free GitHub runner (4 CPUs,
-16 GB RAM, **14 GB disk**) hold and run a single SWE-bench task? If
-yes, benchmarking is free forever. If no, fall back in this order:
-local-only, self-hosted runner on Malay's machine, paid larger runner.
+Lessons carried forward:
 
-**Log the disk used and the wall-clock.** Those two numbers decide
-whether a 50-job matrix is viable, and they are the entire reason the
-spike exists.
-
-Note that the local machine now clears every SWE-bench requirement, so
-this is no longer a dependency — Actions is chosen for public CI
-evidence and parallelism, not because the hardware forces it.
+- **swebench 5.0.2 on PyPI writes to `logs/run_evaluation/RUN_ID/...`**,
+  while the GitHub `main` source says `logs/evaluation/`. Read reports
+  by searching for the task's `report.json`, never a hardcoded path.
+  Check source against the *installed* version, not `main`.
+- Harness 5.x needs `image`, `eval_script`, `log_parser` columns:
+  use `SWE-bench/SWE-bench_Verified` as the dataset and pass Mini task
+  IDs via `--instance_ids` [PRIMARY — swebench 5.0.2 source].
+- A green harness step does not mean resolved; the explicit
+  resolved-check is what caught the problem.
 
 ---
 
