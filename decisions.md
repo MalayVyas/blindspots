@@ -396,6 +396,84 @@ None.
 
 ---
 
+## ADR-0010: Pin the SWE-bench harness; read reports by search
+
+**Date:** 2026-09-26 · **Status:** accepted
+
+### Context
+
+The Week 0 spike (results entry #0) ran the official SWE-bench harness
+on GitHub Actions. Two things surfaced that the plan had assumed away:
+
+1. **The harness changed shape in 5.x.** `swebench` 5.0.2 requires
+   `image`, `eval_script` and `log_parser` columns on every task
+   [PRIMARY — swebench 5.0.2 source, `harness/utils.py`].
+   `SWE-bench/SWE-bench_Verified` has them; the Verified Mini dataset
+   (`MariusHobbhahn/swe-bench-verified-mini`) does not [PRIMARY —
+   Hugging Face dataset viewer]. Passing Mini as `--dataset_name`
+   cannot work.
+2. **Report paths differ between versions.** The release on PyPI
+   (5.0.2) writes per-task reports to
+   `logs/run_evaluation/RUN_ID/MODEL/TASK_ID/report.json`; the source
+   on GitHub `main` writes to `logs/evaluation/` [MEASURED — run
+   36217970815; PRIMARY — GitHub source]. Spike run 1 was marked
+   failed because the summary step read a hardcoded path from `main`
+   while the job ran 5.0.2. The harness had in fact resolved the task.
+
+The scoreboard is the instrument every later result depends on. If
+its behaviour can shift under us, every number after that shift is
+suspect.
+
+### Options considered
+
+| Option | What it lacks |
+| --- | --- |
+| Unpinned `pip install swebench` | A new release can silently change dataset requirements, report paths or grading. Results become irreproducible |
+| Pin, and hardcode the report path for that version | Works until the pin moves; the failure mode is a false "unresolved", which looks like an agent failure rather than a tooling bug |
+| Fork or vendor the harness | Loses the "official harness" credibility and becomes code to maintain |
+| **Pin, and locate reports by search with an exactly-one check** | Chosen |
+
+### Decision
+
+- **Pin `swebench==5.0.2`** everywhere the harness is installed:
+  local WSL, GitHub Actions, and any cloud session. The version is
+  recorded in every run record.
+- **Dataset:** always `SWE-bench/SWE-bench_Verified`. Verified Mini
+  is used only as a **list of task IDs**, passed through
+  `--instance_ids`. The 5-task dev split (ADR-0007) is likewise a
+  list of IDs.
+- **Reading results:** find the task's `report.json` by searching
+  under `logs/` for the task ID and the run ID. Require **exactly
+  one** match; zero or several fails the job loudly. Read `resolved`
+  from that file, never from a summary file or the harness's exit
+  code.
+- **Checking code against docs:** when reading harness source to
+  understand behaviour, read the source of the *installed* version
+  (the tagged release or the installed package), not `main`.
+
+### Consequences
+
+- Scores are reproducible: the same patch and task give the same
+  verdict regardless of when the job runs.
+- A green harness step no longer counts as success on its own. Only
+  `resolved: true` in the task's own report does. This caught a
+  real error on the first run.
+- Harness upgrades become a deliberate, recorded act, not an
+  accident.
+- Cost: pinned software drifts out of date; bug fixes upstream are
+  missed until the pin is moved.
+
+### Reversal condition
+
+Move the pin only when a newer release fixes something that matters
+here. When moving it: re-read that release's source for the report
+path and required columns, re-run the gold and empty-patch checks on
+the 5 dev tasks, and record the change in `results.md`. Never change
+the harness version between the configurations of a comparison run
+(ADR-0008).
+
+---
+
 ## Environment — development machine
 
 **Recorded 2026-09-26.** Reproducibility baseline for every local
