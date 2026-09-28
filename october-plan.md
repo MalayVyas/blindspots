@@ -118,15 +118,15 @@ cannot — everything else is built on the answer.
 locally and in CI.
 
 1. Install the official SWE-bench harness in WSL2; confirm Docker works. *(2h)*
-2. Choose your **5-task dev split** from SWE-bench Verified Mini. Commit the task IDs to the repo. **Do not look at the other 45 tasks again until February.** *(30m)*
+2. Choose your **5-task dev split** from SWE-bench Verified, **outside** Verified Mini (ADR-0007 amendment). Commit the task IDs to the repo. **Do not look at the other 45 tasks again until February.** *(30m)*
 3. Evaluate all 5 gold patches locally. Expect 5/5 resolved. *(2h)*
-4. Evaluate 5 empty patches. Expect 0/5. This proves your harness can fail — a harness that always passes is worse than none. *(30m)*
-5. `results.md` entry #1: harness working, 5/5 gold, 0/5 empty, disk used, wall-clock per task. *(30m)*
+4. **Negative controls — expect 0/5 on both.** (a) 5 empty patches: checks that "no patch" is recorded as a failure. The harness never runs these; it only counts them [PRIMARY — swebench 5.0.2 source, `run_evaluation.py`]. (b) 5 no-op patches: a patch that applies cleanly, adds one text file and changes no code, so the tests really run and FAIL_TO_PASS must fail. (b) is what proves your harness can fail — a harness that always passes is worse than none. *(45m)* *(Amended 2026-09-29: (b) added after finding that empty patches are never evaluated.)*
+5. `results.md` entry #2 (entry #1 became the local smoke test): harness working, 5/5 gold, 0/5 empty, 0/5 no-op, disk used, wall-clock per task. *(30m)*
 6. Wire the same 5 tasks into the Actions matrix from week 0. *(2h)*
 7. Define and implement the **run record** schema described above. JSON, one file per run, written from the very first run. *(2h)*
 
 **Acceptance:** one command gives a verdict for a given patch and task,
-locally and in CI. Gold passes, empty fails. Every run writes a JSON
+locally and in CI. Gold passes; empty and no-op patches fail. Every run writes a JSON
 record.
 
 **Cut list:** item 6 moves to week 2. **Do not cut item 7** —

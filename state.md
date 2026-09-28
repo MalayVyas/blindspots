@@ -49,11 +49,15 @@ benchmark has been run yet.
 
 - ~~Record the spike~~ **done** — `results.md` entry #0, ADR-0010
   (pin `swebench==5.0.2`, locate reports by search).
-- **Week 1 started early, 2026-09-26.** Step 1 (harness in WSL2,
-  Docker confirmed) in progress — see `october-plan.md`.
+- **Week 1 step 1 done (2026-09-29).** Harness 5.0.2 in a uv
+  Python 3.11 venv in WSL2, Docker confirmed, smoke test resolved
+  locally (results entry #1, ADR-0010 addendum).
 - **Week 1 step 2 done (2026-09-29).** Dev split drawn from Verified
   outside Mini (ADR-0007 amendment): 3 django + 2 sphinx, committed
   in `splits/dev_split.json`. Test-set size revisited after Week 3.
+- **Week 1 steps 3–5 done (2026-09-29).** Gold 5/5, empty 0/5,
+  no-op 0/5 on the dev split (results entry #2). Next: step 7 (run
+  record), then step 6 (CI matrix).
 
 ---
 

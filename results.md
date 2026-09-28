@@ -169,3 +169,78 @@ subtraction of two measurements].
 **Limits:** one small task, one run per condition. `docker info`
 (CPUs and memory visible to containers) not yet recorded. The
 5-task dev split gold/empty check (plan item 5) becomes Entry #2.
+
+---
+
+## Entry #2 — Dev split: gold, empty and no-op patches (Week 1 steps 3–4)
+
+**Date:** 2026-09-29
+**Question:** Does the scoreboard say yes to correct fixes and no to
+non-fixes, on the five dev tasks?
+**Answer:** Yes. Gold 5/5 resolved; empty 0/5; no-op 0/5, with every
+FAIL_TO_PASS test failing and every PASS_TO_PASS test passing.
+**Setup:** as entry #1 (swebench 5.0.2, Python 3.11.16, WSL2 +
+Docker Desktop 29.6.2, `HF_DATASETS_OFFLINE=1`, dataset revision
+`78f471bf…`). Tasks from `splits/dev_split.json` (commit f58c8bd).
+1 worker, tasks run one at a time. No model called. Cost: $0.
+
+### Gold patches (run `dev-gold-1`)
+
+| Task | Resolved | Image pull | Evaluation |
+| --- | --- | --- | --- |
+| django__django-13343 | true | 198.3 s | 26.5 s |
+| django__django-13809 | true | 123.5 s | 69.5 s |
+| django__django-14017 | true | 114.5 s | 25.6 s |
+| sphinx-doc__sphinx-8621 | true | 92.5 s | 21.2 s |
+| sphinx-doc__sphinx-9658 | true | 110.8 s | 24.0 s |
+
+Total wall-clock 810.8 s; pulls 639.6 s (79%) + evaluations 166.8 s
++ ~4 s startup [MEASURED — `time` and per-task timestamps in
+`run_instance.log`; the two agree].
+
+### Negative controls
+
+| Control | Run | Result | Wall-clock |
+| --- | --- | --- | --- |
+| Empty patch | `dev-empty-1` | 0/5; all 5 counted as empty, none evaluated | 4.7 s |
+| No-op patch (adds one text file) | `dev-noop-1` | 0/5; all applied | 247.7 s |
+
+| Task | FAIL_TO_PASS pass/fail | PASS_TO_PASS pass/fail |
+| --- | --- | --- |
+| django__django-13343 | 0/1 | 130/0 |
+| django__django-13809 | 0/1 | 245/0 |
+| django__django-14017 | 0/2 | 147/0 |
+| sphinx-doc__sphinx-8621 | 0/2 | 31/0 |
+| sphinx-doc__sphinx-9658 | 0/1 | 24/0 |
+
+All figures [MEASURED], one run each.
+
+### Disk
+
+E: used 66 → 78 GB after five new images [MEASURED — `df`, whole
+GB]: ~2.4 GB per new task image [ESTIMATE]. `docker images` reports
+4.05–4.35 GB per image, but those sizes include shared layers and do
+not add up; `df` is the figure to plan with. Extrapolation: all 50
+Mini tasks ≈ 100–150 GB locally [ESTIMATE] — well above the "5 GB"
+in Mini's README, which predates per-task images in harness 5.x
+[JUDGEMENT]. CI is unaffected (fresh runner per job).
+
+### Findings
+- **The scoreboard discriminates for the right reason.** No-op
+  patches applied, FAIL_TO_PASS failed and PASS_TO_PASS passed — the
+  "no" came from the unfixed bug, not a broken environment.
+- **Empty patches are never evaluated** — the harness counts them
+  and skips them [PRIMARY — swebench 5.0.2 source; MEASURED — 0
+  completed in 4.7 s]. An empty-patch check alone cannot show that
+  scoring works; the no-op control is required.
+- **No flaky tests seen:** all 577 PASS_TO_PASS tests passed under
+  both gold and no-op [MEASURED, two runs — too few to rule
+  flakiness out].
+- **Cold local cost is dominated by image pulls** (79%); warm
+  evaluation is 21–70 s per task, apparently rising with test count
+  [JUDGEMENT, n=5].
+
+**Open:** no-op averaged ~49 s per task against 33 s for gold
+evaluations, both with images already local. Cause not investigated.
+
+**Limits:** one run per condition; five tasks.
