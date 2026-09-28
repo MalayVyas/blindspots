@@ -27,3 +27,13 @@ venv/
 runs/
 logs/
 *.log
+
+# Run records and harness output — they live in ~/bs-work, never here
+# (ADR-0011). Second line of defence if a command runs in the wrong folder.
+records/
+*.dev-*.json
+gold.*.json
+
+# Test fixtures are real harness output kept on purpose; exempt them
+# from the *.log and *.dev-*.json rules above.
+!tests/fixtures/**

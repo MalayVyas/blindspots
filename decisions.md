@@ -585,6 +585,76 @@ record the new revision here.
 
 ---
 
+## ADR-0011: Run record format and runner design
+
+**Date:** 2026-09-29 · **Status:** accepted
+
+### Context
+
+Cost per fix, the headline metric, can only be computed from
+per-attempt records of tokens, cost and outcome. January's reviewer
+benchmark needs every failed patch as labelled data. Both are free if
+captured from the first run and expensive to reconstruct later
+(results.md, "Run records"). Week 1 steps 3–4 also showed the harness
+has behaviour worth recording explicitly: empty patches are never
+evaluated, and a "not resolved" can come from the bug, a broken
+environment, or a patch that did not apply.
+
+### Decision
+
+1. **One JSON file per task attempt**, at `RUN_ID/INSTANCE_ID.json`.
+2. **Schema is a Pydantic v2 model** (`blindspots/record.py`),
+   `schema_version` 1. Extra fields forbidden; records frozen.
+3. **The harness runs as a separate process** through its documented
+   command line; verdicts come from each task's `report.json`, found
+   by search (ADR-0010).
+4. **Exactly one outcome per record**, matching results.md:
+   resolved, unresolved, patch_apply_failed, empty_patch,
+   harness_error, spend_ceiling, wall_clock_limit.
+5. **Consistency enforced at write and read:** config hash matches
+   config; `resolved` only if every FAIL_TO_PASS and PASS_TO_PASS
+   test passed; test results present whenever tests ran.
+6. **Config and prompt hashes** are SHA-256 of canonical JSON (sorted
+   keys) and of prompt files, so comparability (ADR-0008) is checked
+   by code.
+7. **Environment recorded per record:** Blindspots commit, swebench
+   version, dataset name and revision, Python and Docker versions,
+   local or CI.
+8. **Records live outside the repository** (`~/bs-work/records/`
+   locally); in CI, uploaded as workflow artifacts. Artifacts on public
+   repositories expire after at most 90 days [PRIMARY — GitHub Actions
+   docs], so published evidence needs a permanent home — decided in
+   step 6.
+9. **Writes are atomic and never overwrite.** A rerun gets a new run ID.
+10. **Code is a package** (`blindspots/`, `pyproject.toml`) with tests
+    in `tests/`. `swebench==5.0.2` is pinned in `pyproject.toml`.
+
+### Options considered
+
+| Choice | Rejected alternatives and what they lack |
+| --- | --- |
+| One file per attempt | Per-batch file: a crash loses finished tasks. One JSONL file: one bad write damages every record. SQLite: binary, no readable diffs, write conflicts |
+| Pydantic | Plain dict: no checking. Dataclasses: types not enforced. Hand-written JSON Schema: a second definition to keep in sync |
+| Harness as a process | Importing internals: signatures can change even within a pinned major version |
+| Package with tests | Loose scripts: cannot be imported by the agent code |
+
+### Consequences
+
+- Every results.md figure becomes recomputable from files.
+- Failed patches accumulate as reviewer-benchmark data from run one.
+- A disagreement between the harness verdict and results.md's
+  definition of "resolved" stops the write rather than producing a
+  wrong number.
+- Cost: one dependency (Pydantic); records are larger than a summary
+  table, especially once transcripts are included.
+
+### Reversal condition
+
+Change the format only by incrementing `schema_version` and keeping a
+reader for older versions. Never edit existing records.
+
+---
+
 ## Environment — development machine
 
 **Recorded 2026-09-26.** Reproducibility baseline for every local
