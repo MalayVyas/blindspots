@@ -306,6 +306,73 @@ If 5 dev tasks proves too noisy to iterate against, expand the dev
 split from tasks *outside* SWE-bench Verified Mini rather than from
 within it.
 
+### Amendment — dev split outside Mini; test-set size revisited (2026-09-29)
+
+**Corrections to the context above.** Verified Mini is not a random
+subset. It was selected by k-means clustering plus linear programming
+to keep performance, test pass rates and difficulty close to the full
+500 tasks while minimising Docker storage, and it uses only the
+**django and sphinx** repositories [PRIMARY — make_swe_bench_verified_mini
+README]. Results on Mini therefore cover two codebases, and the README
+must say so.
+
+**Change 1 — dev split.** The dev split is drawn from SWE-bench
+Verified tasks **outside** Verified Mini, instead of from within it.
+
+| Option | What it lacks |
+| --- | --- |
+| Dev from inside Mini (original decision) | Test set shrinks to 45; no longer the published 50, so not comparable to others' Mini numbers; the reported set contains tuned-against tasks |
+| **Dev from Verified, outside Mini** | Chosen. Same two repositories and parent pool as the test set, but not filtered for storage size |
+
+**Selection procedure** (fixed before the draw):
+`scripts/choose_dev_split.py` — candidates are Verified tasks not in
+Mini, from django and sphinx only; excluding the smoke-test canary
+`django__django-11099` and tasks labelled ">4 hours"; seats per
+repository follow Mini's mix with at least one per repository;
+seeded random draw, seed `20261001`. The script reads metadata
+columns only and prints nothing but aggregate counts for Mini.
+
+**Result of the draw** (run 2026-09-29, output accepted unmodified):
+
+| instance_id | repo | version | difficulty | FAIL_TO_PASS | PASS_TO_PASS |
+| --- | --- | --- | --- | --- | --- |
+| django__django-13343 | django | 3.2 | 15 min – 1 hour | 1 | 130 |
+| django__django-13809 | django | 4.0 | 15 min – 1 hour | 1 | 245 |
+| django__django-14017 | django | 4.0 | 15 min – 1 hour | 2 | 147 |
+| sphinx-doc__sphinx-9658 | sphinx | 4.3 | 15 min – 1 hour | 1 | 24 |
+| sphinx-doc__sphinx-8621 | sphinx | 3.5 | <15 min fix | 2 | 31 |
+
+Mini's mix: 25 django / 25 sphinx; difficulty 19 "<15 min",
+23 "15 min – 1 hour", 7 "1–4 hours", 1 ">4 hours" [MEASURED — script
+output, aggregates only]. Candidate pool: 205 django, 19 sphinx.
+Seats 3 / 2: the 2.5 / 2.5 tie was broken by dataset order.
+
+The draw skews towards "15 min – 1 hour" and has no "1–4 hours"
+task. Accepted: re-drawing until the mix looks right would be
+cherry-picking. Committed as `splits/dev_split.json`.
+
+**Change 2 — test-set size is decided after Week 3.** Mini (50 tasks)
+is the committed floor. Once cost per task is measured (October
+week 3), the test set may be expanded to a seeded random sample of
+100–150 Verified tasks across all repositories, excluding the dev
+split.
+
+| Option | What it lacks |
+| --- | --- |
+| Mini only, fixed now | Two repositories; n=50 is likely too small to detect a difference (ADR-0008) |
+| Full Verified (500) | ~10x the headline cost [ESTIMATE — budget.md scaled], ~130 GB of images, and would force the dev split outside Verified entirely |
+| **Mini as floor; expansion decided on measured cost** | Chosen. The size decision uses a measured number, not an estimate |
+
+Rules for the expansion, fixed now so they cannot be tuned later:
+the sample is drawn by a committed seeded script; it is decided
+before any agent has run on a test task; the headline reports Mini
+separately as well, so the comparable number is never lost. If the
+measured cost does not allow the expansion, Mini stands and the
+two-repository limit is stated as a limitation.
+
+**Consequence.** All 50 Mini tasks stay untouched until February.
+The dev split works for either test-set size.
+
 ---
 
 ## ADR-0008: Pre-registered comparison protocol
@@ -471,6 +538,50 @@ path and required columns, re-run the gold and empty-patch checks on
 the 5 dev tasks, and record the change in `results.md`. Never change
 the harness version between the configurations of a comparison run
 (ADR-0008).
+
+### Addendum — local harness environment (2026-09-29)
+
+Recorded after the local smoke tests (results entry #1). Same
+decision, extended from CI to the development machine.
+
+**1. Python environment: uv-managed Python 3.11 venv at
+`~/.venvs/blindspots`, inside WSL.**
+
+| Option | What it lacks |
+| --- | --- |
+| System Python (3.12 on Ubuntu 24.04) | Works — swebench 5.0.2 needs ≥3.10 [PRIMARY — PyPI metadata] — but differs from CI's 3.11, adding a variable when local and CI disagree |
+| conda | Heavy; a second package ecosystem for no gain here |
+| venv on E: (`/mnt/e/...`) | Cross-OS file access from WSL is slow for many small files [PRIMARY — Microsoft WSL docs]; also breaks the "source and documents only" rule for `E:\Blindspots` |
+| **uv, Python 3.11, venv in WSL home** | Chosen — matches CI's interpreter; one tool installs both Python and packages |
+
+Verified: Python 3.11.16, swebench 5.0.2, Docker SDK `ping()` →
+True [MEASURED, 2026-09-26].
+
+**2. Local runs set `HF_DATASETS_OFFLINE=1` once the dataset is
+cached.** The Hugging Face Hub online check cost ~45 s per invocation;
+offline mode cut a warm run from 77 s to 33 s with the evaluation
+step unchanged [MEASURED — results entry #1]. Side benefit: the
+dataset cannot change underneath a run. Cached revision:
+`78f471bf655a3137b2e8a75af1501690ec009ec3`.
+First download of any new dataset (e.g. Verified Mini's ID list)
+must run without the flag.
+
+**3. Hugging Face authentication: read-only token.** Stored in WSL
+via `hf auth login` (`~/.cache/huggingface/token`), outside the
+repository; not added as a git credential. CI will read the same
+token from the `HF_TOKEN` repository secret (step 6). Read-only
+scope because the harness only downloads; a leaked read token
+cannot modify anything. Never written to any file under
+`E:\Blindspots` — the repository is public. Verified: `hf auth
+whoami` → `Malay01` [MEASURED, 2026-09-29].
+
+**Open:** pin the dataset revision explicitly in CI as well, so
+local and published runs provably score against the same task
+definitions. Decide in step 6.
+
+**Reversal:** move off Python 3.11 only together with CI. Drop
+offline mode if a dataset update is deliberately adopted — and
+record the new revision here.
 
 ---
 

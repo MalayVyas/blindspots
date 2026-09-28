@@ -51,6 +51,9 @@ benchmark has been run yet.
   (pin `swebench==5.0.2`, locate reports by search).
 - **Week 1 started early, 2026-09-26.** Step 1 (harness in WSL2,
   Docker confirmed) in progress — see `october-plan.md`.
+- **Week 1 step 2 done (2026-09-29).** Dev split drawn from Verified
+  outside Mini (ADR-0007 amendment): 3 django + 2 sphinx, committed
+  in `splits/dev_split.json`. Test-set size revisited after Week 3.
 
 ---
 

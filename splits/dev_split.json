@@ -1,0 +1,12 @@
+{
+  "seed": 20261001,
+  "source": "SWE-bench/SWE-bench_Verified",
+  "excluded": "MariusHobbhahn/swe-bench-verified-mini",
+  "instance_ids": [
+    "django__django-13343",
+    "django__django-13809",
+    "django__django-14017",
+    "sphinx-doc__sphinx-9658",
+    "sphinx-doc__sphinx-8621"
+  ]
+}
