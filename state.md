@@ -1,6 +1,6 @@
 # Blindspots — current state
 
-**Last updated 2026-09-26.** Read this first in a new session. It says
+**Last updated 2026-09-29.** Read this first in a new session. It says
 where the project stands, what is decided, what is still open, and
 which older material is stale.
 
@@ -67,6 +67,14 @@ benchmark has been run yet.
   records and CI matrix built (ADR-0011, ADR-0012). Next: Week 2 —
   DeepSeek provider adapter, token accountant and spend ceiling
   (ADR-0009), simplest agent. First model spend.
+- **Week 2 step 1 done (2026-09-29).** DeepSeek adapter and two-cost
+  pricing (ADR-0013), commit 2a95814. First model spend: 6 calls, about
+  $0.0010 (results entry #5). Cache verified from the response fields.
+  ADR-0008 clarified: "seeds" means repeats.
+  **Local DeepSeek calls need the VPN on** — the home connection drops
+  the TLS handshake.
+  Next: step 2 — token accountant and spend ceiling (ADR-0009). Settings
+  for Week 2 runs: $0.10 per-job cap, `deepseek-flash`, thinking off.
 
 ---
 

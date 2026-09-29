@@ -362,3 +362,56 @@ All [MEASURED], one run. Whole workflow ~3 min, trigger to summary.
 
 **Limits:** one CI run; artifacts expire after 90 days (ADR-0012 open
 item — not a published result, so no permanent copy yet).
+
+---
+
+## Entry #5 — First model calls: DeepSeek adapter smoke test (Week 2 step 1)
+
+**Date:** 2026-09-29
+**Question:** Does the DeepSeek adapter read tokens, cache fields and
+cost back correctly, and does the cache actually hit?
+**Answer:** Yes. 6 calls succeeded (2 more failed before the request was
+sent). Cache hit + miss = input tokens on every call, and billed cost
+matched a hand calculation on all six. Total spend about $0.0010.
+**Setup:** `scripts/deepseek_smoke.py`, commit 2a95814 (runs made on
+the same code just before it was committed), `deepseek-flash`,
+temperature 0, prompt = `blindspots/record.py` (~1,400 tokens) plus a
+one-line question, sent twice per run. Price table
+`deepseek-2026-09-29`. Local WSL2.
+
+| Run (UTC) | Thinking | Peak | Call | Input = hit + miss | Output (reasoning) | Billed | Reference |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 03:07 | enabled, low | yes | 1 | 1,449 = 0 + 1,449 | 86 (24) | $0.000538 | $0.000269 |
+| | | | 2 | 1,449 = 1,280 + 169 | 70 (27) | $0.000142 | $0.000071 |
+| 05:23 | enabled, low | no | 1 | 1,449 = 1,280 + 169 | 126 (54) | $0.000105 | $0.000105 |
+| | | | 2 | 1,449 = 1,280 + 169 | 67 (11) | $0.000069 | $0.000069 |
+| 05:24 | disabled | no | 1 | 1,424 = 1,280 + 144 | 39 (0) | $0.000049 | $0.000049 |
+| | | | 2 | 1,424 = 1,280 + 144 | 48 (0) | $0.000054 | $0.000054 |
+
+All [MEASURED], one run per row. Costs checked by hand against the
+price table.
+
+### Findings
+- **The cache hits on repeat calls and lasted at least 2 h 16 min.**
+  The first call at 05:23 hit a prefix last sent at 03:07.
+- **Every hit was exactly 1,280 tokens (20 × 64),** consistent with a
+  64-token cache unit [JUDGEMENT, 5 observations].
+- **Thinking mode adds 25 input tokens** to identical messages, and
+  the cache is shared between the two modes.
+- **Output isn't deterministic at temperature 0, in either mode.**
+  Output tokens varied 39–48 with thinking off and 67–126 with it on.
+  Reasoning tokens varied 11–54.
+- **Time of day alone changed the price 5x** for the same calls
+  ($0.000538 at peak with no cache hit vs $0.000105 off-peak with a
+  hit). This is the case for the reference cost (ADR-0013).
+- **Network:** two runs failed during the TLS handshake
+  (`UNEXPECTED_EOF_WHILE_READING`) on the home connection. Nothing was
+  sent, so nothing was billed. With a VPN on, every call succeeded.
+  The adapter stopped after one attempt each time, as intended.
+
+**Open:** whether `completion_tokens` includes reasoning tokens. The
+check (reasoning ≤ output) passed on all 4 thinking calls, but that
+fits either reading. Confirm against the DeepSeek usage page.
+
+**Limits:** one short prompt, 6 calls. Not an agent run and not a
+cost-per-task figure.

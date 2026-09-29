@@ -428,6 +428,13 @@ Fixed before any comparison is run:
 
 None. Changing this after results exist defeats its entire purpose.
 
+### Clarification — "seeds" means repeats (2026-09-29)
+
+"Seeds" means independent repeats. DeepSeek has no seed parameter
+[PRIMARY — API reference], and outputs differ between identical calls
+at temperature 0 (results entry #5). The record's `seed` field holds
+the repeat number.
+
 ---
 
 ## ADR-0009: Per-job spend ceiling in code
@@ -719,6 +726,68 @@ same code path so local and CI records are identical in shape.
 Move to a lock file at the first unexplained difference between local
 and CI results. Move to a self-hosted runner only if task images
 outgrow the free runner's disk.
+
+---
+
+## ADR-0013: Provider adapters over raw HTTP; two costs per call
+
+**Date:** 2026-09-29 · **Status:** accepted
+
+### Context
+
+Week 2 needs the first provider adapter (DeepSeek). Reading the API
+reference surfaced three facts the plan had not accounted for:
+
+1. **DeepSeek charges double in peak hours:** 01:00–04:00 and
+   06:00–10:00 UTC, Monday to Friday [PRIMARY — api-docs.deepseek.com,
+   pricing]. The same tokens can cost twice as much depending on when
+   a run starts.
+2. **There is no `seed` parameter** [PRIMARY — API reference].
+3. **Thinking mode is on by default**, its tokens bill as output, and
+   the default `max_tokens` changes with it (8K off, 64K on)
+   [PRIMARY — API reference].
+
+### Options considered
+
+| Choice | Rejected alternatives and what they lack |
+| --- | --- |
+| **`httpx`, calling the API directly** | `openai` SDK: retries failed calls twice by default, against ADR-0009, and converts responses into objects so the raw fields aren't directly visible. LiteLLM: heavy, and applies its own price tables, while cost is the one number that must come from our code |
+| **Two costs per call** | Billed cost only: a configuration run at 6pm looks twice as expensive as the same one at 10pm. Scheduling every comparison off-peak: works until one run starts late, then silently biases the result |
+| **Every setting sent explicitly** | Relying on server defaults: a default change at DeepSeek would change cost and behaviour without changing the config hash |
+
+### Decision
+
+1. Adapters use `httpx` directly. Tests replace the network with
+   `httpx.MockTransport`, so they cost $0.
+2. No server defaults: thinking mode, `max_tokens` and temperature are
+   always sent and are part of the config hash.
+3. Every call records cache-hit, cache-miss, output and reasoning
+   tokens, plus `billed_usd` (the rate in force when the call
+   started), `reference_usd` (off-peak list price) and the price-table
+   version. **ADR-0008 comparisons use `reference_usd`; the budget
+   tracks `billed_usd`.**
+4. The adapter refuses a response whose usage fields are missing, or
+   whose cache hit + miss doesn't equal input tokens. A missing cache
+   field is never read as zero hits.
+5. Prices are copied by hand from the vendor page and dated in
+   `blindspots/pricing.py`. A price change adds a new table version;
+   old versions are never edited.
+
+### Consequences
+
+- Comparisons don't depend on time of day.
+- The price table is maintained by hand.
+- Chinese public holidays aren't modelled, so billed cost is slightly
+  overstated on those days (the safe direction).
+- Local runs that call DeepSeek need the VPN on (results entry #5).
+  CI is expected to be unaffected; the first CI run with model calls
+  will confirm this.
+
+### Reversal condition
+
+Switch to vendor SDKs if the November adapters end up duplicating a
+lot of code. Change the reference price only through a new table
+version.
 
 ---
 
