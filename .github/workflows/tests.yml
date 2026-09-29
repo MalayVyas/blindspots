@@ -1,0 +1,26 @@
+# Unit tests on every push and pull request. No Docker, no model calls,
+# no secrets: ~1 minute, $0. Catches a broken commit before any benchmark
+# runs on it (ADR-0012).
+
+name: tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: pip install -e ".[dev]"
+      - name: Test
+        run: python -m pytest -q

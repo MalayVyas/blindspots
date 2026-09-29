@@ -50,6 +50,20 @@ def load_instance_ids(split_path: Path) -> list[str]:
     return json.loads(Path(split_path).read_text())["instance_ids"]
 
 
+def select_instances(split_ids: list[str], requested: list[str] | None) -> list[str]:
+    """All tasks in the split, or the requested subset of it.
+
+    A requested task that is not in the split is refused: the split file
+    stays the single source of truth for which tasks exist.
+    """
+    if not requested:
+        return split_ids
+    outside = [i for i in requested if i not in split_ids]
+    if outside:
+        raise RunnerError(f"not in the split: {outside}")
+    return [i for i in split_ids if i in requested]
+
+
 def gold_patches(instance_ids: list[str]) -> dict[str, str]:
     """The reference fixes, read from the cached dataset (offline)."""
     from datasets import load_dataset  # imported late: needs the offline flag set first
@@ -180,6 +194,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--split", type=Path, default=DEFAULT_SPLIT)
     ap.add_argument("--workdir", type=Path, default=DEFAULT_WORKDIR)
     ap.add_argument("--max-workers", type=int, default=1)
+    ap.add_argument("--instances", nargs="+", metavar="ID",
+                    help="run only these tasks (must be in the split); default: all")
     args = ap.parse_args(argv)
 
     os.environ["HF_DATASETS_OFFLINE"] = "1"  # before anything imports datasets
@@ -191,7 +207,7 @@ def main(argv: list[str] | None = None) -> int:
     if docker is None:
         raise RunnerError("Docker is not reachable. Is Docker Desktop running?")
 
-    ids = load_instance_ids(args.split)
+    ids = select_instances(load_instance_ids(args.split), args.instances)
     patches = patches_for(args.source, ids)
     env = capture_environment(docker)
     config = {"patch_source": args.source, "dataset": env.dataset_name,

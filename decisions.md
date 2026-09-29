@@ -655,6 +655,73 @@ reader for older versions. Never edit existing records.
 
 ---
 
+## ADR-0012: CI benchmark design
+
+**Date:** 2026-09-29 · **Status:** accepted
+
+### Context
+
+Local runs are the development bench; published results need a clean
+machine, public logs and a link anyone can check. The Week 0 spike
+showed a free runner holds one task with large margin (results
+entry #0). Step 7 built the runner and record format; CI must use the
+same code path so local and CI records are identical in shape.
+
+### Decision
+
+1. **`benchmark.yml`, manual trigger only** (`workflow_dispatch`,
+   inputs: source, run ID). Never on push or schedule — from Week 2
+   a run spends money.
+2. **One job per task** (matrix from `splits/dev_split.json`,
+   `fail-fast: false`), each running `python -m blindspots.run
+   --instances TASK`. The runner refuses tasks outside the split.
+3. **Dataset downloaded at a pinned revision**
+   (`78f471bf655a3137b2e8a75af1501690ec009ec3`) with the `HF_TOKEN`
+   secret, then used offline — same revision as local runs.
+4. **`pip freeze` saved with every job**, as a record of exact
+   package versions.
+5. **Evidence uploaded as workflow artifacts** (record, harness logs,
+   console output, package list), 90-day retention, uploaded even on
+   failure.
+6. **A summary job** re-validates every record and publishes the
+   table on the run page (`python -m blindspots.summarise`).
+7. **`tests.yml`: unit tests on every push and pull request.** No
+   Docker, no secrets, $0.
+8. **Workflow inputs pass through environment variables**, never
+   interpolated into scripts (GitHub script-injection guidance).
+
+### Options considered
+
+| Choice | Rejected alternatives and what they lack |
+| --- | --- |
+| Manual trigger | On push: image pulls on every doc edit; spending must never start automatically. Scheduled: runs nobody asked for |
+| Job per task | One job for all tasks: five images on one runner's disk (14 GB documented floor), serial, one crash loses all |
+| Pinned dataset revision | "Latest": local and CI can silently score different task definitions |
+| `pip freeze` per run | Nothing: CI/local differences untraceable. Full lock file: right eventually, premature now |
+| Shared `summarise` module | Summary logic in YAML: duplicated between CI and local, and drifts |
+
+### Consequences
+
+- Every CI result has a public, permanent-for-90-days link with logs.
+- CI cost: $0 on public repositories [PRIMARY — GitHub docs; confirmed
+  by the spike].
+- Artifacts expire after 90 days. **Open, with a trigger:** before the
+  first run cited as a published result, decide the permanent home
+  (likely GitHub Release attachments; rejected: committing records to
+  the repo, a records branch, AWS S3).
+- `spike.yml` is kept unchanged as the evidence for results entry #0.
+- **Unverified assumption:** the pinned revision equals the local
+  cache folder name. The first CI run confirms or refutes it (a wrong
+  revision fails the download loudly).
+
+### Reversal condition
+
+Move to a lock file at the first unexplained difference between local
+and CI results. Move to a self-hosted runner only if task images
+outgrow the free runner's disk.
+
+---
+
 ## Environment — development machine
 
 **Recorded 2026-09-26.** Reproducibility baseline for every local

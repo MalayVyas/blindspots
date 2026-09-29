@@ -1,0 +1,111 @@
+# Score one patch source on every dev task, one GitHub runner per task,
+# and publish one run record per task (ADR-0011, ADR-0012).
+#
+# Manual only: Actions tab -> "benchmark" -> "Run workflow".
+# Never triggered automatically: from Week 2 a run spends real money.
+
+name: benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        description: "Patch source"
+        type: choice
+        options: [gold, noop, empty]
+        default: gold
+      run_id:
+        description: "New, unique run ID (e.g. ci-gold-1)"
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  DATASET: SWE-bench/SWE-bench_Verified
+  DATASET_REVISION: 78f471bf655a3137b2e8a75af1501690ec009ec3  # ADR-0010 addendum
+  # Inputs go through env, never pasted into scripts: a crafted run ID
+  # cannot then become shell code (GitHub's script-injection guidance).
+  SOURCE: ${{ inputs.source }}
+  RUN_ID: ${{ inputs.run_id }}
+
+jobs:
+  tasks:
+    name: Read the dev split
+    runs-on: ubuntu-24.04
+    outputs:
+      ids: ${{ steps.ids.outputs.ids }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: ids
+        run: |
+          ids=$(python3 -c 'import json; print(json.dumps(json.load(open("splits/dev_split.json"))["instance_ids"]))')
+          echo "ids=$ids" >> "$GITHUB_OUTPUT"
+          echo "Tasks: $ids"
+
+  run:
+    name: ${{ matrix.instance }}
+    needs: tasks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        instance: ${{ fromJSON(needs.tasks.outputs.ids) }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install, and record exact package versions
+        run: |
+          echo "WORKDIR=$RUNNER_TEMP/bs-work" >> "$GITHUB_ENV"
+          WORKDIR="$RUNNER_TEMP/bs-work"
+          pip install -e .
+          mkdir -p "$WORKDIR"
+          pip freeze > "$WORKDIR/pip-freeze.txt"
+
+      - name: Download the dataset at the pinned revision
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          python -c "from datasets import load_dataset; load_dataset('$DATASET', split='test', revision='$DATASET_REVISION')"
+          ls "$HOME/.cache/huggingface/datasets/SWE-bench___swe-bench_verified/default/0.0.0/"
+
+      - name: Run
+        run: |
+          python -m blindspots.run --run-id "$RUN_ID" --source "$SOURCE" \
+            --instances "${{ matrix.instance }}" --workdir "$WORKDIR"
+
+      - name: Upload record, harness logs and package versions
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ env.RUN_ID }}-${{ matrix.instance }}
+          path: |
+            ${{ runner.temp }}/bs-work/records/
+            ${{ runner.temp }}/bs-work/logs/
+            ${{ runner.temp }}/bs-work/harness.*.out
+            ${{ runner.temp }}/bs-work/pip-freeze.txt
+          retention-days: 90
+
+  summary:
+    name: Summary
+    needs: run
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - run: pip install -e .
+      - uses: actions/download-artifact@v6
+        with:
+          pattern: ${{ env.RUN_ID }}-*
+          path: collected
+          merge-multiple: true
+      - name: Re-validate every record and publish the table
+        run: |
+          python -m blindspots.summarise collected/records | tee -a "$GITHUB_STEP_SUMMARY"

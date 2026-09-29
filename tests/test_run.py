@@ -10,7 +10,7 @@ import pytest
 from blindspots.record import Environment, Outcome
 from blindspots.run import (
     NOOP_PATCH, RunnerError, build_records, check_against_summary,
-    patches_for, preflight, write_predictions,
+    patches_for, preflight, select_instances, write_predictions,
 )
 
 FIX = Path(__file__).parent / "fixtures"
@@ -88,3 +88,11 @@ def test_predictions_file_format(tmp_path):
 def test_unknown_source_is_refused():
     with pytest.raises(RunnerError):
         patches_for("agent", [TASK])
+
+
+def test_select_instances():
+    split = ["a", "b", "c"]
+    assert select_instances(split, None) == split
+    assert select_instances(split, ["c", "a"]) == ["a", "c"]   # split order kept
+    with pytest.raises(RunnerError, match="not in the split"):
+        select_instances(split, ["a", "z"])
