@@ -128,6 +128,7 @@ locally and in CI.
 **Acceptance:** one command gives a verdict for a given patch and task,
 locally and in CI. Gold passes; empty and no-op patches fail. Every run writes a JSON
 record.
+**Met 2026-09-29** — results entries #2–#4.
 
 **Cut list:** item 6 moves to week 2. **Do not cut item 7** —
 retrofitting the run record later is painful and costs you the reviewer

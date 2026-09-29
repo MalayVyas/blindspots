@@ -319,3 +319,46 @@ All [MEASURED], one run per source.
 
 **Limits:** two runs per task; timing only. No model called, so no
 cost or token figures yet.
+
+---
+
+## Entry #4 — First CI benchmark: gold on the dev split (Week 1 step 6)
+
+**Date:** 2026-09-29
+**Question:** Does the benchmark workflow reproduce local verdicts on
+GitHub's runners, with one record per task?
+**Answer:** Yes. 5/5 resolved — identical to entries #2 and #3.
+**Run:** github.com/MalayVyas/blindspots/actions/runs/36506913529
+(`ci-gold-1`, commit cc6492a, ubuntu-24.04 standard runners, one
+runner per task). Cost: $0.
+**Dataset revision confirmed (ADR-0012 assumption):** Hugging Face
+accepted the pinned revision `78f471bf655a3137b2e8a75af1501690ec009ec3`,
+and the CI record's `dataset_revision` is the same ID — local and CI
+score identical task definitions [MEASURED — record environment block].
+**Environment differences:** Python 3.11.16 on both; Docker 28.0.4 on
+CI vs 29.6.2 locally.
+
+| Task | Eval (s) | Tests (s) | Teardown (s) | Job (s) |
+| --- | --- | --- | --- | --- |
+| django__django-13343 | 23.4 | 7.0 | 15.2 | 95 |
+| django__django-13809 | 53.7 | 37.5 | 15.2 | 128 |
+| django__django-14017 | 21.3 | 5.1 | 15.3 | 96 |
+| sphinx-doc__sphinx-8621 | 19.5 | 3.7 | 15.2 | 109 |
+| sphinx-doc__sphinx-9658 | 18.5 | 2.8 | 15.1 | 94 |
+
+All [MEASURED], one run. Whole workflow ~3 min, trigger to summary.
+
+### Findings
+- **Local and CI verdicts agree** on all 5 tasks.
+- **CI test runtimes were 20–40% below local** on all 5 tasks (e.g.
+  django-13809: 37.5 s vs 46.0 s) [MEASURED, one run each]. Plausible
+  cause: native Linux Docker vs WSL2 + Docker Desktop [JUDGEMENT,
+  untested]. Timing comparisons must therefore never mix machines;
+  the `machine` field in every record makes that checkable.
+- **Teardown is machine-independent:** 15.1–15.3 s, now 15 of 15
+  evaluations across two machines.
+- **Parallel matrix:** total time is set by the slowest task
+  (django-13809, 2 min 8 s), not the sum.
+
+**Limits:** one CI run; artifacts expire after 90 days (ADR-0012 open
+item — not a published result, so no permanent copy yet).

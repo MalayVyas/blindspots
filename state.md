@@ -62,6 +62,11 @@ benchmark has been run yet.
   `python -m blindspots.run` writes one validated JSON record per
   task; acceptance test passed (results entry #3). Next: step 6 —
   CI matrix, built on the runner.
+- **Week 1 complete (2026-09-29), ahead of its 1 October start.**
+  Local and CI scoreboards agree (results entries #2–#4); runner,
+  records and CI matrix built (ADR-0011, ADR-0012). Next: Week 2 —
+  DeepSeek provider adapter, token accountant and spend ceiling
+  (ADR-0009), simplest agent. First model spend.
 
 ---
 
