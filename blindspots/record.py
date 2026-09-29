@@ -45,10 +45,22 @@ class SuiteResults(_Strict):
 
 
 class Timing(_Strict):
+    """Wall-clock for one task, from the harness's own log (run_instance.log).
+
+    image_pull_s: first log line to "container created" (None if the image
+        was already local). Includes container creation, ~0.1-4 s.
+    evaluation_s: "container created" to the last log line.
+    test_runtime_s: the harness's own "Test runtime" figure, inside evaluation_s.
+    teardown_s: "attempting to stop container" to the last line, inside
+        evaluation_s. The harness waits up to 15 s for the stop.
+    """
+
     started_at: datetime
     finished_at: datetime
-    image_pull_s: float | None = None  # None if not measurable
+    image_pull_s: float | None = None
     evaluation_s: float | None = None
+    test_runtime_s: float | None = None
+    teardown_s: float | None = None
 
 
 class Usage(_Strict):
