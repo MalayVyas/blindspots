@@ -8,6 +8,7 @@ version = "0.1.0"
 description = "Role-level cost benchmark for multi-agent coding pipelines"
 requires-python = ">=3.11"
 dependencies = [
+    "httpx>=0.27,<1",    # provider adapters: ADR-0013
     "pydantic>=2.7,<3",
     "swebench==5.0.2",   # pinned: ADR-0010
 ]
