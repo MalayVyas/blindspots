@@ -58,6 +58,10 @@ benchmark has been run yet.
 - **Week 1 steps 3–5 done (2026-09-29).** Gold 5/5, empty 0/5,
   no-op 0/5 on the dev split (results entry #2). Next: step 7 (run
   record), then step 6 (CI matrix).
+- **Week 1 step 7 done (2026-09-29).** Run records (ADR-0011):
+  `python -m blindspots.run` writes one validated JSON record per
+  task; acceptance test passed (results entry #3). Next: step 6 —
+  CI matrix, built on the runner.
 
 ---
 

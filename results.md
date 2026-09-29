@@ -254,4 +254,68 @@ modifying the pinned harness (ADR-0010); accepted as fixed overhead,
 ~15 s per evaluation. Per-task figures are now captured automatically
 (`test_runtime_s`, `teardown_s` in the run record).
 
+**Correction 2026-09-29 (entry #3):** "failing tests ran longer" does
+not hold. In run 2 no-op test runtimes were *below* gold on all five
+tasks (e.g. django-13343: 7.3 s vs 9.9 s). Run 1's 16.8 s vs 9.2 s was
+a single-sample difference within run-to-run variation. The teardown
+finding stands (15.3–15.4 s on 10 of 10 tasks).
+
 **Limits:** one run per condition; five tasks.
+
+---
+
+## Entry #3 — Runner acceptance test: first results computed from run records
+
+**Date:** 2026-09-29
+**Question:** Does `python -m blindspots.run` reproduce entry #2, and
+write one valid record per task?
+**Answer:** Yes. 15 records: gold 5/5 resolved, no-op 5/5 unresolved,
+empty 5/5 empty_patch — identical verdicts to entry #2. Every record
+re-validated on reading; every run cross-checked against the harness
+summary; no `-dirty` commits.
+**Setup:** runs `dev-gold-2`, `dev-noop-2`, `dev-empty-2`; commit
+bd85364; otherwise as entry #2. Images already local. Cost: $0.
+**Source:** all figures read from `~/bs-work/records/` by
+`read_record` — none typed by hand.
+
+### Per-task timing, run 2 (seconds)
+
+| Task | Gold eval | Gold tests | No-op eval | No-op tests | Teardown |
+| --- | --- | --- | --- | --- | --- |
+| django__django-13343 | 27.9 | 9.9 | 23.8 | 7.3 | 15.3–15.4 |
+| django__django-13809 | 63.6 | 46.0 | 62.1 | 45.5 | 15.3 |
+| django__django-14017 | 26.6 | 8.9 | 24.2 | 7.7 | 15.3 |
+| sphinx-doc__sphinx-8621 | 21.4 | 5.0 | 20.1 | 4.1 | 15.3 |
+| sphinx-doc__sphinx-9658 | 20.2 | 3.7 | 18.8 | 2.8 | 15.3 |
+| **Total** | **159.7** | **73.5** | **149.0** | **67.4** | **~76.5 each** |
+
+All [MEASURED], one run per source.
+
+### Gold evaluation, run 1 vs run 2
+
+| Task | Run 1 (entry #2) | Run 2 | Difference |
+| --- | --- | --- | --- |
+| django__django-13343 | 26.5 | 27.9 | +1.4 |
+| django__django-13809 | 69.5 | 63.6 | −5.9 |
+| django__django-14017 | 25.6 | 26.6 | +1.0 |
+| sphinx-doc__sphinx-8621 | 21.2 | 21.4 | +0.2 |
+| sphinx-doc__sphinx-9658 | 24.0 | 20.2 | −3.8 |
+
+[MEASURED — first repeat measurement of the same tasks]
+
+### Findings
+- **Teardown is a fixed ~15.3 s per evaluation** (10 of 10 tasks,
+  15.3–15.4 s) — about half of all evaluation time. Cause: the
+  harness's `docker stop --time=15` (entry #2).
+- **Evaluation ≈ the task's test runtime + ~17 s** (teardown plus
+  ~1–2.5 s for container start, patch and grading). The slowest dev
+  task, django-13809, is slow because of its tests (~46 s), not
+  overhead.
+- **Run-to-run variation in evaluation time: up to ~6 s per task**
+  across two gold runs [MEASURED, n=2]. Too few runs for an interval;
+  enough to rule out drawing timing conclusions from one run.
+- **Verdicts were identical across runs** — 10 of 10 evaluated tasks
+  gave the same outcome as entry #2 [MEASURED, n=2 per task].
+
+**Limits:** two runs per task; timing only. No model called, so no
+cost or token figures yet.
