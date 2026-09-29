@@ -62,15 +62,23 @@ class DeepSeek:
 
     def complete(self, messages: list[dict[str, str]], *, model: str,
                  max_tokens: int, temperature: float, thinking: Thinking,
-                 reasoning_effort: Effort | None = None) -> Completion:
-        """One call, no retries. Raises ProviderError on anything unexpected."""
+                 reasoning_effort: Effort | None = None,
+                 timeout_s: float | None = None) -> Completion:
+        """One call, no retries. Raises ProviderError on anything unexpected.
+
+        timeout_s overrides the client timeout for this call; the accountant
+        passes the job's remaining wall-clock. httpx applies it to each phase
+        (connect, send, wait for the reply) separately, not to the call as a
+        whole, so the caller must still check elapsed time afterwards.
+        """
         body = build_request(messages, model=model, max_tokens=max_tokens,
                              temperature=temperature, thinking=thinking,
                              reasoning_effort=reasoning_effort)
         started = datetime.now(timezone.utc)
         t0 = time.monotonic()
         try:
-            resp = self._http.post("/chat/completions", json=body)
+            kwargs = {} if timeout_s is None else {"timeout": timeout_s}
+            resp = self._http.post("/chat/completions", json=body, **kwargs)
         except httpx.HTTPError as e:  # timeout, connection refused, DNS ...
             raise ProviderError(f"request failed: {type(e).__name__}: {e}") from e
         latency = time.monotonic() - t0

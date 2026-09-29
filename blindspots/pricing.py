@@ -83,6 +83,16 @@ def cost_of(model: str, *, cache_hit_tokens: int, cache_miss_tokens: int,
     )
 
 
+def ceiling_usd(model: str, *, cache_hit_tokens: int, cache_miss_tokens: int,
+                output_tokens: int) -> float:
+    """Actual tokens at peak price: what the spend ceiling counts (ADR-0014).
+
+    Never below the billed cost, and independent of when the job ran, so
+    the same job hits or misses its ceiling whatever the time of day.
+    """
+    return _price(PEAK, model, cache_hit_tokens, cache_miss_tokens, output_tokens)
+
+
 def worst_case_usd(model: str, *, input_tokens: int, output_tokens: int) -> float:
     """Upper bound for a call not yet made: every input token a cache miss,
     every output token used, peak rates. The accountant (step 2) uses this

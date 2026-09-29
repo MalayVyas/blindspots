@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "run_id": "fixture-v1",
+  "instance_id": "django__django-13343",
+  "patch_source": "gold",
+  "model": null,
+  "seed": null,
+  "config": {
+    "patch_source": "gold",
+    "swebench_version": "5.0.2"
+  },
+  "config_hash": "6ff8a2d43dd7be4b898a803b08aa42fec8d7538a2882e9d6ae38261df052ade5",
+  "prompt_hashes": {},
+  "patch": "diff --git a/x b/x\n",
+  "outcome": "resolved",
+  "tests": {
+    "fail_to_pass_passed": [
+      "t1"
+    ],
+    "fail_to_pass_failed": [],
+    "pass_to_pass_passed": [
+      "t2"
+    ],
+    "pass_to_pass_failed": []
+  },
+  "usage": {
+    "model_calls": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "cached_input_tokens": 0,
+    "cost_usd": 0.0
+  },
+  "timing": {
+    "started_at": "2026-09-29T00:00:00Z",
+    "finished_at": "2026-09-29T00:00:00Z",
+    "image_pull_s": null,
+    "evaluation_s": null,
+    "test_runtime_s": null,
+    "teardown_s": null
+  },
+  "transcript": [],
+  "harness_log": null,
+  "error": null,
+  "environment": {
+    "blindspots_commit": "f58c8bd",
+    "swebench_version": "5.0.2",
+    "dataset_name": "SWE-bench/SWE-bench_Verified",
+    "dataset_revision": null,
+    "python_version": "3.11.16",
+    "docker_version": "29.6.2",
+    "machine": "local"
+  }
+}

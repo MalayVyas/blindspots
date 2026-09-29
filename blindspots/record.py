@@ -16,7 +16,12 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+# Version history (ADR-0011: never edit old records, keep a reader for them):
+#   1  Week 1. Usage held input/output/cached tokens and one cost_usd.
+#   2  Week 2. Usage adds cache-miss and reasoning tokens and three costs
+#      (ADR-0013, ADR-0014); outcome provider_error; a `breach` block.
+#   A version-1 file still loads: every new field has a default.
 
 
 class Outcome(str, Enum):
@@ -29,6 +34,7 @@ class Outcome(str, Enum):
     HARNESS_ERROR = "harness_error"
     SPEND_CEILING = "spend_ceiling"        # from Week 2 (ADR-0009)
     WALL_CLOCK_LIMIT = "wall_clock_limit"  # from Week 2 (ADR-0009)
+    PROVIDER_ERROR = "provider_error"      # schema 2: the model API failed; no patch
 
 
 class _Strict(BaseModel):
@@ -64,13 +70,36 @@ class Timing(_Strict):
 
 
 class Usage(_Strict):
-    """Model usage. All zero for patches that did not come from a model."""
+    """Model usage for the whole job. All zero for patches not from a model.
+
+    input_tokens = cached_input_tokens + cache_miss_input_tokens (schema 2).
+    output_tokens includes reasoning_tokens.
+    cost_usd       what was billed (the name is kept from schema 1).
+    reference_usd  the same tokens at off-peak list price; comparisons use
+                   this (ADR-0013).
+    ceiling_usd    the same tokens at peak price; the spend ceiling counts
+                   this (ADR-0014).
+    """
 
     model_calls: int = 0
     input_tokens: int = 0
     output_tokens: int = 0
     cached_input_tokens: int = 0
     cost_usd: float = 0.0
+    # schema 2
+    cache_miss_input_tokens: int = 0
+    reasoning_tokens: int = 0
+    reference_usd: float = 0.0
+    ceiling_usd: float = 0.0
+
+
+class Breach(_Strict):
+    """Which limit stopped the job, and by how much (ADR-0014)."""
+
+    limit: Literal["calls", "input_tokens", "output_tokens", "cost_usd", "wall_clock_s"]
+    allowed: float        # the limit
+    would_reach: float    # the total the job had reached, or would have reached
+    before_call: bool     # True: refused before sending, nothing billed for it
 
 
 class Environment(_Strict):
@@ -94,7 +123,7 @@ def config_hash(config: dict[str, Any]) -> str:
 
 
 class RunRecord(_Strict):
-    schema_version: Literal[1] = SCHEMA_VERSION
+    schema_version: Literal[1, 2] = SCHEMA_VERSION
     run_id: str
     instance_id: str
     patch_source: str  # "gold", "empty", "noop", or "agent:NAME" from Week 2
@@ -111,6 +140,7 @@ class RunRecord(_Strict):
     transcript: list[dict[str, Any]] = []  # model messages, from Week 2
     harness_log: str | None = None
     error: str | None = None
+    breach: Breach | None = None  # schema 2: set iff a limit stopped the job
     environment: Environment
 
     @model_validator(mode="after")
@@ -131,6 +161,21 @@ class RunRecord(_Strict):
 
         if self.outcome is Outcome.EMPTY_PATCH and self.patch.strip():
             raise ValueError("empty_patch outcome with a non-empty patch")
+
+        if self.schema_version >= 2:
+            limited = self.outcome in (Outcome.SPEND_CEILING, Outcome.WALL_CLOCK_LIMIT)
+            if limited != (self.breach is not None):
+                raise ValueError("breach must be set exactly when a limit stopped the job")
+            if self.breach is not None:
+                wall = self.breach.limit == "wall_clock_s"
+                if wall != (self.outcome is Outcome.WALL_CLOCK_LIMIT):
+                    raise ValueError(f"breach {self.breach.limit} does not match "
+                                     f"outcome {self.outcome.value}")
+            u = self.usage
+            if u.cached_input_tokens + u.cache_miss_input_tokens != u.input_tokens:
+                raise ValueError("usage: cached + cache-miss input != input tokens")
+            if u.reasoning_tokens > u.output_tokens:
+                raise ValueError("usage: reasoning tokens exceed output tokens")
         return self
 
 
