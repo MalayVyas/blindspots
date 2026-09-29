@@ -37,3 +37,6 @@ gold.*.json
 # Test fixtures are real harness output kept on purpose; exempt them
 # from the *.log and *.dev-*.json rules above.
 !tests/fixtures/**
+
+# The Claude desktop app saves files attached in chat here. Drafts, not source.
+Claude outputs/

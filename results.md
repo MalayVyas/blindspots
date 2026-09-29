@@ -243,4 +243,15 @@ in Mini's README, which predates per-task images in harness 5.x
 **Open:** no-op averaged ~49 s per task against 33 s for gold
 evaluations, both with images already local. Cause not investigated.
 
+**Partly answered 2026-09-29** (from `run_instance.log`, task
+django__django-13343): the harness's own test runtime was 9.2 s for
+gold and 16.8 s for no-op, so failing tests ran longer. Both runs
+then spent 15.5 s waiting for the container to stop — the harness
+calls `docker stop --time=15` and the container does not exit early
+[PRIMARY — swebench 5.0.2 `docker_utils.py`; MEASURED, one task].
+That is 58% of this task's gold evaluation. Not fixable without
+modifying the pinned harness (ADR-0010); accepted as fixed overhead,
+~15 s per evaluation. Per-task figures are now captured automatically
+(`test_runtime_s`, `teardown_s` in the run record).
+
 **Limits:** one run per condition; five tasks.
