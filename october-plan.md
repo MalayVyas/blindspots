@@ -142,7 +142,7 @@ dataset.
 with your money.
 
 1. **Provider adapter** for DeepSeek: chat completion, token counts read back from the response, cache fields surfaced. *(3h)* **Done 2026-09-29** — results entry #5, ADR-0013.
-2. **Token accountant and spend ceiling.** Per job: max input tokens, max output tokens, max model calls, max wall-clock. On breach, abort and write the partial transcript rather than retrying. Refuse to start if projected cost exceeds the cap. *(3h)*
+2. **Token accountant and spend ceiling.** Per job: max input tokens, max output tokens, max model calls, max wall-clock. On breach, abort and write the partial transcript rather than retrying. Refuse to start if projected cost exceeds the cap. *(3h)* **Done 2026-09-29** — results entry #6, ADR-0014.
 3. **Simplest possible agent:** issue text plus repo file tree plus relevant file contents in, unified diff out. No roles. No loop. *(3h)*
 4. Run it on dev task 1. Expect it to fail. Capture the run record. *(2h)*
 

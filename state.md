@@ -75,6 +75,16 @@ benchmark has been run yet.
   the TLS handshake.
   Next: step 2 — token accountant and spend ceiling (ADR-0009). Settings
   for Week 2 runs: $0.10 per-job cap, `deepseek-flash`, thinking off.
+- **Week 2 step 2 done (2026-09-29).** Token accountant and spend
+  ceiling (ADR-0014), record schema 2, commit 029f95f. A broken loop
+  was stopped by the cost cap and by the clock with real API calls
+  (results entry #6). Failure definitions gained "model API failed".
+  Model spend to date: about $0.002.
+  Next: step 3 — simplest agent. Issue text, a trimmed file tree and
+  the relevant files in; a unified diff out. Files chosen by keyword
+  matching on the issue text only — never from the gold patch. After
+  each run, record whether the gold patch's files were in context
+  (localisation hit rate, a diagnostic).
 
 ---
 

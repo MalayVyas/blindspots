@@ -28,6 +28,7 @@ exclusions**, and each is counted and reported separately:
 | Job hit the spend ceiling | failure |
 | Job hit the wall-clock limit | failure |
 | Harness errored | failure |
+| Model API failed (network, HTTP error, bad response) | failure |
 
 A run that excludes its failures is not a measurement.
 
@@ -415,3 +416,43 @@ fits either reading. Confirm against the DeepSeek usage page.
 
 **Limits:** one short prompt, 6 calls. Not an agent run and not a
 cost-per-task figure.
+
+---
+
+## Entry #6 — Spend ceiling, live: a deliberately broken loop (Week 2 step 2)
+
+**Date:** 2026-09-29
+**Question:** Does the accountant stop a loop with no stop condition,
+with real API calls and real money?
+**Answer:** Yes, by both the cost cap and the clock. Billed spend stayed
+under the cap.
+**Setup:** `scripts/ceiling_demo.py`, commit 029f95f, `deepseek-flash`,
+thinking off, `max_tokens` 400, prompt "Count from 1 to 150" (50 bytes),
+off-peak. Other limits set loose so that only the one being tested
+could fire.
+
+| Run | Limit | Calls | Tokens in / out | Billed | Ceiling $ | Stopped by |
+| --- | --- | --- | --- | --- | --- | --- |
+| ceiling-cost-20260929T055052Z | $0.001 cap | 2 | 34 / 598 | $0.000364 | $0.000728 | cost: $0.0012225 projected, **refused before sending** |
+| ceiling-wall-20260929T055111Z | 5 s | 3 | 51 / 897 | $0.000546 | $0.001586 | wall-clock: 5.0024 s, **caught after the call** |
+
+All [MEASURED], one run each. Both records re-validated on reading. The
+Week 1 schema-1 records (`dev-gold-2`) still load under schema 2.
+
+### Findings
+- **The ceiling holds with real money:** billed $0.000364 against a
+  $0.001 cap. The refusal figure ($0.000728 spent + $0.000495 worst
+  case for the next call) matches a hand calculation exactly.
+- **The per-call timeout doesn't bound total time**, because the
+  network library times each stage (connect, send, wait) separately.
+  The job overran by 2.4 ms and the after-call check caught it.
+- **The bytes-to-tokens estimate was about 2.9x loose on this prompt**
+  (50 bytes, 17 tokens).
+- **A 17-token prompt got no cache hit**, consistent with the
+  64-token block (entry #5).
+
+**Not tested live:** a call cut off by the timeout. That's covered by a
+unit test only, so whether DeepSeek bills an abandoned call is still
+open.
+
+**Running total of model spend:** about $0.002 (entries #5 and #6).

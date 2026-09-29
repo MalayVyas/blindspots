@@ -791,6 +791,64 @@ version.
 
 ---
 
+## ADR-0014: The spend ceiling as built
+
+**Date:** 2026-09-29 · **Status:** accepted
+
+### Context
+
+ADR-0009 requires per-job limits, enforced in code, before any
+unattended run. Building them raised three questions ADR-0009 doesn't
+answer: which dollars the cap counts, how the clock is enforced during a
+call, and how to account for a call that gets cut off.
+
+### Options considered
+
+| Choice | Rejected alternatives and what they lack |
+| --- | --- |
+| **Cap counts peak-price dollars** | Billed dollars: the same job passes off-peak and breaches at peak, which breaks ADR-0008's identical ceilings. Reference (off-peak) dollars: real spending at peak can reach 2x the cap |
+| **Accountant sits in front of the adapter** | Limits inside each adapter: every November adapter would reimplement them |
+| **Timeout set to the remaining time, plus an after-call check** | Timeout alone: the network library applies it per stage, so a job can still overrun (measured: 2.4 ms, results entry #6). A background thread killing the call: not safe in Python |
+| **Estimate by prompt bytes** | Estimating by characters: can under-count. An exact tokenizer: an extra dependency, not yet confirmed to match DeepSeek's |
+
+### Decision
+
+1. Five limits per job: calls, input tokens, output tokens, wall-clock,
+   and peak-price dollars. They're stored in the config, so they're part
+   of the config hash.
+2. Week 2 values: 5 calls, 200,000 input tokens, 16,000 output tokens,
+   600 s, $0.10.
+3. Before each call, the job's totals plus the call's worst case are
+   checked. If any limit would be passed, the call is refused and
+   nothing is sent.
+4. After each call, the real totals are checked again.
+5. A call cut off by the clock is booked at its worst case.
+6. Any breach ends the job: outcome `spend_ceiling` or
+   `wall_clock_limit`, with the partial transcript. Nothing is retried.
+7. Record schema 2 adds the `breach` block, `reference_usd`,
+   `ceiling_usd`, cache-miss and reasoning tokens, and the
+   `provider_error` outcome. Version 1 records still load.
+
+### Consequences
+
+- Real spending can't exceed the cap, except through a call cut off
+  partway, which is booked at its worst case.
+- The byte estimate is about 3–4x loose, so large prompts may be
+  refused early. That's deliberate: it's the safe direction, and step 4
+  will measure how often it happens.
+- The cap is stricter off-peak than it needs to be.
+
+**Open:** whether DeepSeek bills a call the client abandons
+[UNVERIFIED].
+
+### Reversal condition
+
+Replace the byte estimate with an exact tokenizer if good calls are
+regularly refused. Revisit the limit values when the multi-agent
+pipeline arrives in December, using the costs measured in Week 3.
+
+---
+
 ## Environment — development machine
 
 **Recorded 2026-09-26.** Reproducibility baseline for every local
