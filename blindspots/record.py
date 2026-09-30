@@ -21,6 +21,9 @@ SCHEMA_VERSION = 2
 #   1  Week 1. Usage held input/output/cached tokens and one cost_usd.
 #   2  Week 2. Usage adds cache-miss and reasoning tokens and three costs
 #      (ADR-0013, ADR-0014); outcome provider_error; a `breach` block.
+#      Amended before the first agent run: optional `diagnostics` (agent
+#      status, file selection, localisation). Optional with a default, so
+#      the two schema-2 records written before it still load.
 #   A version-1 file still loads: every new field has a default.
 
 
@@ -141,6 +144,7 @@ class RunRecord(_Strict):
     harness_log: str | None = None
     error: str | None = None
     breach: Breach | None = None  # schema 2: set iff a limit stopped the job
+    diagnostics: dict[str, Any] = {}  # schema 2: agent status, selection, localisation
     environment: Environment
 
     @model_validator(mode="after")

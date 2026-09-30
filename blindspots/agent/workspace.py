@@ -56,6 +56,20 @@ def load_task(instance_id: str, dataset: str = "SWE-bench/SWE-bench_Verified") -
     raise WorkspaceError(f"{instance_id} not in {dataset}")
 
 
+def load_tasks(instance_ids: list[str],
+               dataset: str = "SWE-bench/SWE-bench_Verified") -> list[Task]:
+    """Several tasks in one pass over the dataset, in the order given."""
+    from datasets import load_dataset
+
+    wanted = set(instance_ids)
+    found = {r["instance_id"]: Task.from_row(r)
+             for r in load_dataset(dataset, split="test") if r["instance_id"] in wanted}
+    missing = wanted - found.keys()
+    if missing:
+        raise WorkspaceError(f"not in {dataset}: {sorted(missing)}")
+    return [found[i] for i in instance_ids]
+
+
 def _run(*cmd: str, cwd: Path | None = None) -> str:
     p = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
     if p.returncode != 0:

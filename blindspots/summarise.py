@@ -22,16 +22,19 @@ def load(root: Path) -> list[RunRecord]:
 
 def table(records: list[RunRecord]) -> str:
     f = lambda x: f"{x:.1f}" if x is not None else "–"
-    rows = ["| Run | Task | Outcome | Eval (s) | Tests (s) | Teardown (s) | Machine | Commit |",
-            "| --- | --- | --- | --- | --- | --- | --- | --- |"]
+    rows = ["| Run | Task | Outcome | Eval (s) | Tests (s) | Teardown (s) | Cost ($) | Machine | Commit |",
+            "| --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
     for r in records:
         t = r.timing
+        cost = f"{r.usage.cost_usd:.5f}" if r.usage.model_calls else "–"
         rows.append(f"| {r.run_id} | {r.instance_id} | {r.outcome.value} | "
                     f"{f(t.evaluation_s)} | {f(t.test_runtime_s)} | {f(t.teardown_s)} | "
-                    f"{r.environment.machine} | {r.environment.blindspots_commit[:7]} |")
+                    f"{cost} | {r.environment.machine} | {r.environment.blindspots_commit[:7]} |")
     counts = Counter(r.outcome.value for r in records)
     totals = ", ".join(f"{n} {k}" for k, n in sorted(counts.items()))
-    return "\n".join(rows) + f"\n\n**{len(records)} records:** {totals}\n"
+    spent = sum(r.usage.cost_usd for r in records)
+    money = f" Model spend ${spent:.5f} (billed)." if spent else ""
+    return "\n".join(rows) + f"\n\n**{len(records)} records:** {totals}.{money}\n"
 
 
 def main(argv: list[str] | None = None) -> int:

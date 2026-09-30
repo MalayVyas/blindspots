@@ -32,7 +32,7 @@ def test_table_from_real_records(tmp_path):
                           {"patch_source": "noop"}, T0, T0)
     write_record(rec, tmp_path / "records")
     out = table(load(tmp_path / "records"))
-    assert f"| r1 | {TASK} | unresolved | 36.7 | 16.8 | 15.5 | ci | bd85364 |" in out
+    assert f"| r1 | {TASK} | unresolved | 36.7 | 16.8 | 15.5 | – | ci | bd85364 |" in out
     assert "**1 records:** 1 unresolved" in out
 
 

@@ -2,8 +2,11 @@
 
     python -m blindspots.run --run-id dev-gold-2 --source gold
 
-Sources today: gold, empty, noop. From Week 2 the agent becomes another
-source. See ADR-0011.
+Sources: gold, empty, noop (controls, $0) and agent:simple (Week 2 step 4:
+the simple agent writes the patch, spending real money under the ADR-0014
+limits). See ADR-0011.
+
+    python -m blindspots.run --run-id dev-agent-1 --source agent:simple --instances django__django-13343
 """
 
 from __future__ import annotations
@@ -37,7 +40,8 @@ NOOP_PATCH = (
     "@@ -0,0 +1 @@\n"
     "+Negative control: this patch changes no code.\n"
 )
-SOURCES = ("gold", "empty", "noop")
+SOURCES = ("gold", "empty", "noop", "agent:simple")
+AGENT_SOURCES = ("agent:simple",)
 
 
 class RunnerError(RuntimeError):
@@ -88,9 +92,13 @@ def patches_for(source: str, instance_ids: list[str]) -> dict[str, str]:
 
 def write_predictions(path: Path, source: str, patches: dict[str, str]) -> Path:
     """JSONL: one object per line, the format the harness reads."""
+    # The harness uses model_name_or_path as a folder name under logs/.
+    # GitHub's artifact upload rejects ':' in paths, so "agent:simple"
+    # becomes "agent-simple" there.
+    name = source.replace(":", "-")
     with open(path, "w") as f:
         for iid, patch in patches.items():
-            f.write(json.dumps({"instance_id": iid, "model_name_or_path": source,
+            f.write(json.dumps({"instance_id": iid, "model_name_or_path": name,
                                 "model_patch": patch}) + "\n")
     return path
 
@@ -147,14 +155,30 @@ def capture_environment(docker: str | None) -> Environment:
 
 def build_records(run_id: str, source: str, patches: dict[str, str],
                   workdir: Path, env: Environment, config: dict,
-                  run_start: datetime, run_end: datetime) -> list[RunRecord]:
+                  run_start: datetime, run_end: datetime,
+                  attempts: dict | None = None) -> list[RunRecord]:
+    """One record per task. `attempts` (agent sources only) carries each task's
+    usage, transcript, prompt hashes and any outcome decided before scoring."""
     logs = Path(workdir) / "logs"
     whole_run = Timing(started_at=run_start, finished_at=run_end)
+    attempts = attempts or {}
     records = []
     for iid, patch in patches.items():
         common = dict(run_id=run_id, instance_id=iid, patch_source=source,
                       config=config, config_hash=config_hash(config),
                       patch=patch, environment=env)
+        a = attempts.get(iid)
+        if a is not None:
+            common.update(model=config.get("model"), usage=a.usage, transcript=a.transcript,
+                          prompt_hashes=a.prompt_hashes, diagnostics=a.diagnostics)
+            if a.outcome is not None:
+                # Decided before scoring: a limit, an API failure, or no usable edit.
+                # The harness never saw this task.
+                records.append(RunRecord(**common, outcome=a.outcome, tests=None,
+                                         timing=Timing(started_at=a.started_at,
+                                                       finished_at=a.finished_at),
+                                         breach=a.breach, error=a.error))
+                continue
         if not patch.strip():
             # The harness never evaluates empty patches (results.md entry #2).
             records.append(RunRecord(**common, outcome=Outcome.EMPTY_PATCH,
@@ -184,6 +208,35 @@ def check_against_summary(records: list[RunRecord], summary: dict) -> None:
                           f"harness summary says {sorted(theirs)}")
 
 
+# ---------------------------------------------------------------- agent
+
+def run_agent(ids: list[str], workdir: Path) -> dict:
+    """Prepare every workspace first, so a Docker or commit problem stops the
+    run before any money is spent; then one agent job per task."""
+    from blindspots.accountant import Limits
+    from blindspots.agent.attempt import attempt_all
+    from blindspots.agent.workspace import WorkspaceError, load_tasks, prepare
+    from blindspots.providers.base import ProviderError
+    from blindspots.providers.deepseek import DeepSeek
+
+    repos = Path(workdir) / "repos"
+    try:
+        tasks = load_tasks(ids)
+        for t in tasks:
+            prepare(t, repos)
+        provider = DeepSeek()  # refuses here, at $0, if the key is missing
+    except (WorkspaceError, ProviderError) as e:
+        raise RunnerError(str(e)) from e
+
+    def report(a):
+        status = a.outcome.value if a.outcome else a.diagnostics.get("agent_status")
+        print(f"  agent {a.instance_id:28} {status:18} ${a.usage.cost_usd:.5f}  "
+              f"{a.usage.input_tokens:,} in / {a.usage.output_tokens:,} out")
+
+    with provider:
+        return attempt_all(tasks, provider, Limits(), repos, report)
+
+
 # ---------------------------------------------------------------- main
 
 def main(argv: list[str] | None = None) -> int:
@@ -208,34 +261,52 @@ def main(argv: list[str] | None = None) -> int:
         raise RunnerError("Docker is not reachable. Is Docker Desktop running?")
 
     ids = select_instances(load_instance_ids(args.split), args.instances)
-    patches = patches_for(args.source, ids)
     env = capture_environment(docker)
     config = {"patch_source": args.source, "dataset": env.dataset_name,
               "dataset_revision": env.dataset_revision,
               "swebench_version": env.swebench_version}
     print(f"{args.run_id}: {len(ids)} tasks, source={args.source}, commit={env.blindspots_commit}")
 
-    if args.source == "gold":
-        predictions = "gold"
+    attempts = None
+    if args.source in AGENT_SOURCES:
+        attempts = run_agent(ids, workdir)
+        patches = {i: attempts[i].patch for i in ids}
+        from blindspots.agent.attempt import agent_config
+        from blindspots.accountant import Limits
+        config.update(agent_config(Limits()))
     else:
-        workdir.mkdir(parents=True, exist_ok=True)
-        predictions = str(write_predictions(workdir / f"preds.{args.run_id}.jsonl",
-                                            args.source, patches))
+        patches = patches_for(args.source, ids)
 
+    # Only tasks with a patch go to the harness. Tasks whose outcome is
+    # already decided (a limit, an API failure, no usable edit) do not.
+    to_score = [i for i in ids if patches[i].strip()] if attempts is not None else ids
     start = datetime.now().astimezone()
-    code = harness.run_harness(ids, predictions, args.run_id, workdir, args.max_workers)
+    if to_score:
+        if args.source == "gold":
+            predictions = "gold"
+        else:
+            workdir.mkdir(parents=True, exist_ok=True)
+            predictions = str(write_predictions(
+                workdir / f"preds.{args.run_id}.jsonl", args.source,
+                {i: patches[i] for i in to_score}))
+        code = harness.run_harness(to_score, predictions, args.run_id, workdir,
+                                   args.max_workers)
+        print(f"harness exit code {code}; console output in {workdir}/harness.{args.run_id}.out")
+    else:
+        print("no patches to score; harness not run")
     end = datetime.now().astimezone()
-    print(f"harness exit code {code}; console output in {workdir}/harness.{args.run_id}.out")
 
     records = build_records(args.run_id, args.source, patches, workdir, env,
-                            config, start, end)
-    check_against_summary(records, harness.read_summary(
-        harness.find_summary(workdir, args.run_id)))
+                            config, start, end, attempts)
+    if to_score:
+        check_against_summary(records, harness.read_summary(
+            harness.find_summary(workdir, args.run_id)))
     for rec in records:
         path = write_record(rec, records_root)
         t = rec.timing
+        cost = f"  ${rec.usage.cost_usd:.5f}" if rec.usage.model_calls else ""
         print(f"  {rec.instance_id:28} {rec.outcome.value:18} "
-              f"eval={t.evaluation_s if t.evaluation_s is not None else '-'}  -> {path.name}")
+              f"eval={t.evaluation_s if t.evaluation_s is not None else '-'}{cost}  -> {path.name}")
     print(f"{len(records)} records in {records_root / args.run_id}")
     return 0
 
