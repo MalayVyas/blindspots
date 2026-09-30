@@ -1,6 +1,6 @@
 # Blindspots — current state
 
-**Last updated 2026-09-29.** Read this first in a new session. It says
+**Last updated 2026-09-30.** Read this first in a new session. It says
 where the project stands, what is decided, what is still open, and
 which older material is stale.
 
@@ -85,6 +85,21 @@ benchmark has been run yet.
   matching on the issue text only — never from the gold patch. After
   each run, record whether the gold patch's files were in context
   (localisation hit rate, a diagnostic).
+- **Week 2 complete (2026-09-30), ahead of its 8 October start.**
+  Step 3: simple agent (ADR-0015), commit b8298b1. Step 4: agent source
+  in the runner, commit fb25fab:
+  `python -m blindspots.run --run-id NAME --source agent:simple`.
+  First scored agent runs on django-13343: one unresolved, one
+  **resolved**, identical input (results entry #7). Warm-cache attempt
+  about $0.0003; cost per fix on that task $0.00069. Model spend to
+  date about $0.007.
+  Lessons: outcomes vary run to run, so single-run scores are noise;
+  SWE-bench images carry an empty commit on top of `base_commit`;
+  commit before a run so records are not `-dirty`.
+  Next: Week 3 — caching and October's number. Caching is already
+  hitting 99.5% on repeats (entry #7), so Week 3's remaining work is
+  the cached-vs-uncached comparison, three repeats per task, and the
+  first cost-per-task figure with a spread.
 
 ---
 

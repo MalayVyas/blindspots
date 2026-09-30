@@ -456,3 +456,69 @@ unit test only, so whether DeepSeek bills an abandoned call is still
 open.
 
 **Running total of model spend:** about $0.002 (entries #5 and #6).
+
+---
+
+## Entry #7 — First agent runs: dev task 1, end to end (Week 2 steps 3–4)
+
+**Date:** 2026-09-30
+**Question:** Does the simple agent produce a patch the harness can
+score, what does an attempt cost, and how stable is the outcome?
+**Answer:** Yes. Two scored attempts on the same task with identical
+input: one unresolved, one **resolved**. With a warm cache an attempt
+cost about $0.0003–0.0004.
+**Setup:** `deepseek-flash`, thinking off, temperature 0, `max_tokens`
+4,096, ADR-0014 limits, prompts `prompts/simple/`, file selection by
+keyword (ADR-0015). Task `django__django-13343`. Local WSL2, off-peak.
+
+| Attempt | Commit | Input = cached + uncached | Output | Billed | FAIL_TO_PASS | PASS_TO_PASS | Outcome |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `agent_try` (04:13 UTC) | b8298b1 (pre-commit) | 27,522 = 0 + 27,522 | 641 | $0.00451 | not scored | not scored | patch produced |
+| `dev-agent-1` (04:25 UTC) | b8298b1-dirty | 27,522 = 27,388 + 134 | 373 | $0.000326 | 0 / 1 | 130 / 130 | **unresolved** |
+| `dev-agent-2` (04:31 UTC) | fb25fab | 27,522 = 27,388 + 134 | 433 | $0.000362 | 1 / 1 | 130 / 130 | **resolved** |
+
+All [MEASURED], one attempt per row. Harness evaluation 39.3 s and
+40.3 s. `agent_try` was a look at the agent before the runner existed;
+it was not scored and is not counted below.
+
+### Findings
+- **The outcome varies between runs, not just the wording.** Identical
+  input at temperature 0 gave a failed fix and a correct one. One run
+  per task would have reported this task as 0% or 100% by luck. A
+  5-task dev score from single runs is mostly noise; ADR-0008's
+  repeats are necessary, not a nicety.
+- **Why run 1 failed:** it did half the fix. It saved the callable
+  storage (`self._storage_callable`) but never returned it from
+  `deconstruct()`, so the one FAIL_TO_PASS test
+  (`test_deconstruction`, `FieldCallableFileStorageTests`) still
+  failed. Nothing else broke. Run 2 did both halves.
+- **The `agent_try` patch would likely have broken Django:** it made
+  `storage` a read-only property, which `__init__` then assigns to
+  [JUDGEMENT — read from the patch; not scored].
+- **Cache:** 99.5% of input came from the cache on both scored runs
+  (27,388 of 27,522). A warm attempt cost 13x less than the cold one.
+  27,388 is not a multiple of 64, which weakens the "64-token block"
+  reading of entry #5; left unexplained.
+- **Cost per fix on this task:** $0.000688 spent ÷ 1 resolved =
+  **$0.00069** [MEASURED, n=2, warm cache, off-peak]. A cold-cache
+  attempt would cost about $0.0045.
+- **Localisation:** the gold file (`django/db/models/fields/files.py`)
+  was shown in all three attempts. Both failures were "found it, fixed
+  it wrong", not "couldn't find it".
+- **The accountant's byte estimate was 4.4x loose** on real code
+  (121,914 bytes, 27,522 tokens). No limit came close to firing.
+- **File selection ranked a re-export module first.**
+  `django.db.models.FileField` resolved to `django/db/models/__init__.py`
+  (160 points), which only re-exports `FileField`; the defining file
+  scored 20. It was still included. Not tuned on one task; a baseline
+  for the December localiser.
+- **SWE-bench images add an empty commit on top of `base_commit`**
+  (HEAD `e5321912f5` "SWE-bench", parent `ece18207cb`, no file
+  changes). Checking commit IDs refused a correct copy; the workspace
+  now compares file trees (ADR-0015).
+- **Safety checks at $0:** two runs refused to start because Docker
+  Desktop was not running.
+
+**Limits:** one task, two scored attempts. Not a resolve rate.
+
+**Running total of model spend:** about $0.007 (entries #5–#7).

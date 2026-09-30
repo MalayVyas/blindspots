@@ -849,6 +849,71 @@ pipeline arrives in December, using the costs measured in Week 3.
 
 ---
 
+## ADR-0015: The simple agent (Week 2)
+
+**Date:** 2026-09-30 · **Status:** accepted
+
+### Context
+
+Week 2 step 3 needed a first agent: one model call, no roles, no loop.
+Four choices shape every later agent and, once comparison runs begin,
+are bound by ADR-0008: where the agent reads the code from, what the
+model writes back, how the prompt is laid out, and how files are
+chosen.
+
+### Options considered
+
+| Choice | Rejected alternatives and what they lack |
+| --- | --- |
+| **Code from the task image's `/testbed`**, checked by file tree | `git clone` at `base_commit`: ~300 MB per Django task over a flaky connection, and a second copy that could differ from what the harness tests. Checking commit IDs: refuses correct copies, because the images add an empty commit (results entry #7) |
+| **Search/replace blocks; our code writes the diff** | Model writes a unified diff: wrong line numbers and malformed hunks fail to apply, so scores would partly measure diff formatting. Fuzzy matching of blocks: a guess about what the model meant, which we would then score |
+| **Prompt: system, repo context, issue, then role instruction last** | Role instruction first or in the system prompt: in December each role would change the start of the prompt, so no role could reuse another's cached prefix (ADR-0005) |
+| **Files chosen by keyword matching on the issue text** | Whole repository: millions of tokens. Gold-patch files ("oracle" retrieval): leaks the answer. Embedding search: another model and another cost, before a baseline exists |
+
+### Decision
+
+1. The agent reads the repository copied out of the task's Docker image
+   (`/testbed`), kept per task under `~/bs-work/repos/`. Its files must
+   be identical to `base_commit` (equal tree hashes), and a reused copy
+   must be unchanged since it was copied.
+2. The model replies with search/replace blocks. Each SEARCH text must
+   match exactly once. Our code builds the diff with `difflib` and
+   checks it with `git apply --check`. A block that does not match is
+   `patch_apply_failed`; no blocks is `empty_patch`.
+3. Prompt parts live in `prompts/simple/` and are hashed into every
+   record. Order: system, repository context, issue, instruction.
+   Nothing that varies between runs appears in any part.
+4. Files are chosen from the issue text only: explicit paths, dotted
+   module names, file names, and code-looking identifiers found by
+   their definitions. Test files are down-weighted. Budgets: 120 KB of
+   file content, 20 KB of directory listing, 8 files.
+5. After each run, the record stores whether the gold patch's files
+   were shown (`diagnostics.localisation`). It is never shown to the
+   model.
+6. Week 2 settings: `deepseek-flash`, thinking off, temperature 0,
+   `max_tokens` 4,096, ADR-0014 limits.
+
+### Consequences
+
+- The agent reads exactly the code the harness tests, with no network.
+- A failed patch always means the model's edit was wrong, never that
+  our diff was malformed.
+- Identical prompts across repeats of a task make nearly all input
+  cacheable (99.5% measured, results entry #7).
+- Keyword selection can rank a re-export module above the defining
+  file (entry #7). Accepted as a baseline for the December localiser.
+- Needs Docker Desktop running, and the task image local, before the
+  agent can start.
+
+### Reversal condition
+
+Replace keyword selection when the localiser role exists and beats it
+on localisation hit rate. Allow a fuzzier match only if exact matching
+turns out to cause most `patch_apply_failed` outcomes, and then record
+the change as a new prompt/config version, never mid-comparison.
+
+---
+
 ## Environment — development machine
 
 **Recorded 2026-09-26.** Reproducibility baseline for every local
