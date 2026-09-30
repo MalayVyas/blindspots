@@ -16,8 +16,11 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=8"]
 
-[tool.setuptools]
-packages = ["blindspots"]
+# Find subpackages too (blindspots.providers, blindspots.agent). The old
+# explicit list named only the top package, which a non-editable install
+# would have shipped without its subpackages.
+[tool.setuptools.packages.find]
+include = ["blindspots*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

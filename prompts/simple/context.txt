@@ -1,0 +1,12 @@
+# Repository context
+
+These are the directories most likely to matter, and the full contents of
+the files most likely to matter. Other files exist but are not shown.
+
+## Directory listing
+
+{tree}
+
+## Files
+
+{files}

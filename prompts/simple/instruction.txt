@@ -1,0 +1,23 @@
+# Your task
+
+Fix the problem described in the report by editing the repository's
+source code. Do not edit or add tests.
+
+Reply with one or more edit blocks and nothing else of importance. Each
+edit block has exactly this form:
+
+path/to/file.py
+<<<<<<< SEARCH
+the exact lines currently in the file
+=======
+the lines that should replace them
+>>>>>>> REPLACE
+
+Rules:
+- The path is relative to the repository root, as in the listing.
+- The SEARCH part must be copied exactly from the file, including
+  indentation and blank lines, and must match exactly one place in it.
+  Include enough surrounding lines to make it unique; keep it short.
+- Use several blocks for several changes. Blocks are applied in order.
+- To create a new file, leave the SEARCH part empty.
+- You may write a short explanation before the blocks.
