@@ -243,6 +243,15 @@ def test_workspace_refuses_wrong_commit(repo, tmp_path):
     assert prepare(t, root) == ws
     assert environment_changes(t, ws) == ["setup.py", "tox.ini"]
     git(ws, "reset", "-q", "--hard", "HEAD~1")
+    # ...so is one that only changes file permissions (the chmod -R 777 in
+    # SWE-bench's image build), even on source files...
+    (ws / "mypkg" / "calc.py").chmod(0o755)
+    (ws / "mypkg" / "util.py").chmod(0o755)
+    git(ws, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qam", "SWE-bench")
+    (ws / ".git" / "blindspots-baseline").write_text("")
+    assert prepare(t, root) == ws
+    assert environment_changes(t, ws) == []
+    git(ws, "reset", "-q", "--hard", "HEAD~1")
     # ...a commit that changes code is not.
     (ws / "mypkg" / "util.py").write_text("changed\n")
     git(ws, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qam", "edit")

@@ -137,14 +137,39 @@ def environment_changes(task: Task, repo_dir: Path) -> list[str]:
     if ancestor.returncode != 0:
         raise WorkspaceError(f"{repo_dir}: base_commit {task.base_commit[:12]} is not an "
                              f"ancestor of HEAD ({head_commit(repo_dir)[:12]})")
-    changed = sorted(_run("git", "-C", d, "diff", "--name-only",
-                          task.base_commit, "HEAD").splitlines())
+    changed = content_changes(repo_dir, task.base_commit)
     code = [f for f in changed if not _is_environment_file(f)]
     if code:
+        shown = ", ".join(code[:10]) + (f" ... and {len(code) - 10} more" if len(code) > 10 else "")
         raise WorkspaceError(f"{repo_dir}: files at HEAD ({head_commit(repo_dir)[:12]}) differ "
                              f"from base_commit {task.base_commit[:12]} beyond packaging "
-                             f"and test configuration: {code}")
+                             f"and test configuration: {shown}")
     return changed
+
+
+def content_changes(repo_dir: Path, base_commit: str) -> list[str]:
+    """Files whose CONTENTS differ between base_commit and HEAD.
+
+    A change of permissions alone is ignored. SWE-bench's image build runs
+    `chmod -R 777` on the repository [PRIMARY — swebench 5.0.2
+    image_builder/docker_utils.py]; when that is committed, every file shows
+    as changed while no byte of code differs (results entry #8, django-14017).
+    `git diff --raw` gives each file's content id (blob hash) before and after;
+    equal ids mean equal bytes.
+    """
+    out = subprocess.run(["git", "-C", str(repo_dir), "diff", "--raw", "-z", "--no-renames",
+                          "--abbrev=40", base_commit, "HEAD"],
+                         capture_output=True, text=True, check=True).stdout
+    # -z output: ":oldmode newmode oldblob newblob status\0path\0" per file
+    parts = out.split("\0")
+    changed = []
+    for meta, path in zip(parts[0::2], parts[1::2]):
+        if not meta:
+            continue
+        _, _, old_blob, new_blob, _ = meta.lstrip(":").split(" ")
+        if old_blob != new_blob:
+            changed.append(path)
+    return sorted(changed)
 
 
 def _status(repo_dir: Path) -> str:
