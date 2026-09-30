@@ -233,13 +233,31 @@ def test_workspace_refuses_wrong_commit(repo, tmp_path):
     # An empty commit on top (what SWE-bench images have) is accepted...
     git(ws, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "SWE-bench")
     assert prepare(t, root) == ws
+    # ...so is one that only changes packaging / test configuration (the
+    # sphinx images pin dependencies in setup.py and add -rA in tox.ini)...
+    from blindspots.agent.workspace import environment_changes
+    (ws / "setup.py").write_text("install_requires = ['Jinja2<3.0']\n")
+    (ws / "tox.ini").write_text("[testenv]\ncommands = pytest -rA\n")
+    git(ws, "-c", "user.email=t@t", "-c", "user.name=t", "add", "setup.py", "tox.ini")
+    git(ws, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "SWE-bench")
+    assert prepare(t, root) == ws
+    assert environment_changes(t, ws) == ["setup.py", "tox.ini"]
+    git(ws, "reset", "-q", "--hard", "HEAD~1")
     # ...a commit that changes code is not.
     (ws / "mypkg" / "util.py").write_text("changed\n")
     git(ws, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qam", "edit")
     (ws / ".git" / "blindspots-baseline").write_text("")
-    with pytest.raises(WorkspaceError, match="differ from base_commit"):
+    with pytest.raises(WorkspaceError, match=r"beyond packaging.*mypkg/util.py"):
         prepare(t, root)
     git(ws, "reset", "-q", "--hard", "HEAD~1")
+    # A HEAD that does not descend from base_commit is refused.
+    git(ws, "checkout", "-q", "--orphan", "other")
+    git(ws, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "unrelated")
+    with pytest.raises(WorkspaceError, match="not an ancestor"):
+        prepare(t, root)
+    git(ws, "checkout", "-q", "-f", "master" if subprocess.run(
+        ["git", "-C", str(ws), "rev-parse", "--verify", "-q", "master"],
+        capture_output=True).returncode == 0 else "main")
     (root / t.instance_id / "mypkg" / "calc.py").write_text("changed\n")
     with pytest.raises(WorkspaceError, match="changed since"):
         prepare(t, root)

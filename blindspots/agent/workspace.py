@@ -82,7 +82,9 @@ def head_commit(repo_dir: Path) -> str:
 
 
 def prepare(task: Task, root: Path) -> Path:
-    """Return a local copy of the task's repository at its base commit."""
+    """Return a local copy of the task's code, exactly as the harness tests it:
+    base_commit plus, at most, the image's packaging and test-configuration
+    edits (environment_changes)."""
     dest = Path(root) / task.instance_id
     if not dest.exists():
         dest.parent.mkdir(parents=True, exist_ok=True)
@@ -97,22 +99,52 @@ def prepare(task: Task, root: Path) -> Path:
         # setup can touch files) [UNVERIFIED]. Remember its state as copied,
         # so a later reuse can check that nothing has changed since.
         (dest / ".git" / "blindspots-baseline").write_text(_status(dest))
-    # Compare file trees, not commit IDs. SWE-bench images add an empty
-    # commit ("SWE-bench") on top of base_commit (results entry #7), so HEAD
-    # differs while the files are identical. Equal tree hashes mean
-    # byte-identical files; any real change to the code is refused.
-    try:
-        base_tree = _run("git", "-C", str(dest), "rev-parse", f"{task.base_commit}^{{tree}}")
-    except WorkspaceError:
-        raise WorkspaceError(f"{dest} does not contain base_commit {task.base_commit[:12]}")
-    head_tree = _run("git", "-C", str(dest), "rev-parse", "HEAD^{tree}")
-    if head_tree != base_tree:
-        raise WorkspaceError(f"{dest}: files at HEAD ({head_commit(dest)[:12]}) differ from "
-                             f"base_commit {task.base_commit[:12]}")
+    environment_changes(task, dest)  # refuses if the image changed real code
     baseline = (dest / ".git" / "blindspots-baseline").read_text()
     if _status(dest) != baseline:
         raise WorkspaceError(f"{dest} changed since it was copied; delete it to re-copy")
     return dest
+
+
+# Files SWE-bench's image build may change on top of base_commit, to make an
+# old project install and to make pytest report every test (results entry #8:
+# sphinx-8621 pins dependencies in setup.py and adds -rA in tox.ini; django
+# images add an empty commit). Anything else changed means the image's code
+# is not the task's code, and the task is refused.
+ENVIRONMENT_FILES = {"setup.py", "setup.cfg", "tox.ini", "pyproject.toml", "pytest.ini"}
+
+
+def _is_environment_file(path: str) -> bool:
+    name = path.rsplit("/", 1)[-1]
+    return path in ENVIRONMENT_FILES or (
+        "/" not in path and name.startswith("requirements") and name.endswith(".txt"))
+
+
+def environment_changes(task: Task, repo_dir: Path) -> list[str]:
+    """Files the image changed on top of base_commit. [] for an identical tree.
+
+    The agent sees the image's tree, because that is what the harness tests.
+    Refuses unless base_commit is an ancestor of HEAD and every changed file
+    is packaging or test configuration (ENVIRONMENT_FILES), at the top level.
+    """
+    d = str(repo_dir)
+    try:
+        _run("git", "-C", d, "cat-file", "-e", f"{task.base_commit}^{{commit}}")
+    except WorkspaceError:
+        raise WorkspaceError(f"{repo_dir} does not contain base_commit {task.base_commit[:12]}")
+    ancestor = subprocess.run(["git", "-C", d, "merge-base", "--is-ancestor",
+                               task.base_commit, "HEAD"], capture_output=True)
+    if ancestor.returncode != 0:
+        raise WorkspaceError(f"{repo_dir}: base_commit {task.base_commit[:12]} is not an "
+                             f"ancestor of HEAD ({head_commit(repo_dir)[:12]})")
+    changed = sorted(_run("git", "-C", d, "diff", "--name-only",
+                          task.base_commit, "HEAD").splitlines())
+    code = [f for f in changed if not _is_environment_file(f)]
+    if code:
+        raise WorkspaceError(f"{repo_dir}: files at HEAD ({head_commit(repo_dir)[:12]}) differ "
+                             f"from base_commit {task.base_commit[:12]} beyond packaging "
+                             f"and test configuration: {code}")
+    return changed
 
 
 def _status(repo_dir: Path) -> str:

@@ -47,6 +47,8 @@ def test_every_ending_is_captured(no_prepare, tmp_path, provider, limits, outcom
     if outcome in (None, Outcome.EMPTY_PATCH, Outcome.PATCH_APPLY_FAILED):
         assert a.usage.model_calls == 1 and len(a.transcript) == 1
     assert (a.patch != "") == (outcome is None)
+    if status is not None:
+        assert a.diagnostics["image_environment_changes"] == []
 
 
 def config():

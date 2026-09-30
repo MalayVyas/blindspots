@@ -29,6 +29,7 @@ on:
 
 permissions:
   contents: read
+  actions: read   # to look up earlier runs' artifacts (run-ID check below)
 
 env:
   DATASET: SWE-bench/SWE-bench_Verified
@@ -38,6 +39,8 @@ env:
   SOURCE: ${{ inputs.source }}
   RUN_ID: ${{ inputs.run_id }}
   INSTANCES: ${{ inputs.instances }}
+  # Print Python output as it happens, so log lines appear in order.
+  PYTHONUNBUFFERED: "1"
 
 jobs:
   tasks:
@@ -47,6 +50,29 @@ jobs:
       ids: ${{ steps.ids.outputs.ids }}
     steps:
       - uses: actions/checkout@v5
+      - name: Refuse a run ID that an earlier run already used
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Each runner starts empty, so the local "records already exist"
+          # check cannot see earlier CI runs. Their artifacts are named
+          # exactly RUN_ID-TASK for each dev task; any such name means the ID
+          # is taken. Exact names, not prefixes: "ci-gold" must not collide
+          # with "ci-gold-1-...". (Artifacts expire after 90 days, so this
+          # covers the last 90 days.)
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" \
+            --jq '.artifacts[].name' > "$RUNNER_TEMP/artifact-names.txt"
+          python3 - <<'EOF'
+          import json, os, sys
+          run_id = os.environ["RUN_ID"]
+          tasks = json.load(open("splits/dev_split.json"))["instance_ids"]
+          names = set(open(os.path.join(os.environ["RUNNER_TEMP"], "artifact-names.txt")).read().split())
+          taken = sorted(n for n in (f"{run_id}-{t}" for t in tasks) if n in names)
+          if taken:
+              print(f"::error::run ID '{run_id}' was already used (artifact {taken[0]}). Choose a new one.")
+              sys.exit(1)
+          print(f"run ID '{run_id}' is new")
+          EOF
       - id: ids
         run: |
           # The split file is the only source of task IDs; a requested ID

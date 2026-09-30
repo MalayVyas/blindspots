@@ -22,7 +22,7 @@ from typing import Any, Callable
 from blindspots.accountant import Accountant, LimitBreached, Limits, outcome_for
 from blindspots.agent import context as ctx
 from blindspots.agent import simple
-from blindspots.agent.workspace import Task, prepare
+from blindspots.agent.workspace import Task, environment_changes, prepare
 from blindspots.providers.base import ProviderError
 from blindspots.record import Breach, Outcome, Usage
 
@@ -71,7 +71,8 @@ def attempt(task: Task, provider, limits: Limits, repos_root: Path) -> Attempt:
     except ProviderError as e:
         return done(patch="", outcome=Outcome.PROVIDER_ERROR, error=str(e))
 
-    diag = {"agent_status": res.status, "selection": res.selection, **res.diagnostics}
+    diag = {"agent_status": res.status, "selection": res.selection,
+            "image_environment_changes": environment_changes(task, repo), **res.diagnostics}
     if res.status == "patch":
         return done(patch=res.patch, outcome=None, diagnostics=diag)
     if res.status == "no_edits":
