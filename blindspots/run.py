@@ -193,7 +193,7 @@ def build_records(run_id: str, source: str, patches: dict[str, str],
                 harness_log=str(log) if log else None,
                 error=f"no report.json; see harness.{run_id}.out"))
             continue
-        outcome, suite = harness.read_report(report, iid)
+        outcome, suite = harness.read_report(report, iid, log)
         records.append(RunRecord(**common, outcome=outcome, tests=suite,
                                  timing=timing, harness_log=str(log)))
     return records

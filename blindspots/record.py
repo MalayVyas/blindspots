@@ -24,6 +24,9 @@ SCHEMA_VERSION = 2
 #      Amended before the first agent run: optional `diagnostics` (agent
 #      status, file selection, localisation). Optional with a default, so
 #      the two schema-2 records written before it still load.
+#      Amended 2026-09-30: outcome tests_errored, split out of
+#      patch_apply_failed (results entry #8). Records written earlier keep
+#      their label; records are never edited (ADR-0011).
 #   A version-1 file still loads: every new field has a default.
 
 
@@ -38,6 +41,8 @@ class Outcome(str, Enum):
     SPEND_CEILING = "spend_ceiling"        # from Week 2 (ADR-0009)
     WALL_CLOCK_LIMIT = "wall_clock_limit"  # from Week 2 (ADR-0009)
     PROVIDER_ERROR = "provider_error"      # schema 2: the model API failed; no patch
+    TESTS_ERRORED = "tests_errored"        # schema 2: patch applied, but the test run
+                                           # produced no results (crash, timeout)
 
 
 class _Strict(BaseModel):

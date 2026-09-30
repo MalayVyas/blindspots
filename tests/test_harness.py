@@ -65,6 +65,29 @@ def test_outcome_order(change, expected):
     assert (suite is None) == (expected is not Outcome.UNRESOLVED)
 
 
+# ---- "patch_successfully_applied: False" is ambiguous; the log decides
+# (results entry #8: a patch that applied cleanly and then crashed the tests)
+
+NOT_APPLIED = {"patch_successfully_applied": False}
+
+
+@pytest.mark.parametrize("log, expected", [
+    ("... >>>>> Applied Patch:\nApplied patch x.py cleanly.\n...", Outcome.TESTS_ERRORED),
+    ("... >>>>> Patch Apply Failed:\nerror: patch failed\n", Outcome.PATCH_APPLY_FAILED),
+    ("... nothing recognisable ...", Outcome.HARNESS_ERROR),
+    (None, Outcome.PATCH_APPLY_FAILED),
+])
+def test_not_applied_is_decided_by_the_log(log, expected):
+    outcome, suite = outcome_from_report({**BASE, **NOT_APPLIED}, log)
+    assert outcome is expected and suite is None
+
+
+def test_real_logs_carry_the_applied_marker():
+    for name in ("gold", "noop"):
+        text = (FIX / name / "run_instance.log").read_text()
+        assert ">>>>> Applied Patch" in text and ">>>>> Patch Apply Failed" not in text
+
+
 # ---- timing from real logs (figures match results.md entry #2)
 
 def test_gold_timing_cold_image():

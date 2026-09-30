@@ -101,6 +101,18 @@ benchmark has been run yet.
   the cached-vs-uncached comparison, three repeats per task, and the
   first cost-per-task figure with a spread.
 
+- **Agent in CI (2026-09-30).** `benchmark.yml` runs `agent:simple`
+  with a task filter; `DEEPSEEK_API_KEY` repository secret in place (a
+  CI-only key); reused run IDs are refused before any runner starts.
+  CI reaches DeepSeek without a VPN. First CI resolve: django-14017
+  (results entry #8). New outcome `tests_errored`; workspace rule
+  compares file contents (ADR-0015 amendment).
+  Finding: localisation decided every outcome so far; both resolves
+  had the gold file shown, all tasks without it failed.
+  Model spend to date about $0.023.
+  Next: Week 3, starting with a proper five-task, three-repeat run.
+  The main open question: how much localisation limits the resolve rate.
+
 ---
 
 ## Spike result (Week 0, done)

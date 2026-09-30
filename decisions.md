@@ -912,6 +912,29 @@ on localisation hit rate. Allow a fuzzier match only if exact matching
 turns out to cause most `patch_apply_failed` outcomes, and then record
 the change as a new prompt/config version, never mid-comparison.
 
+### Amendment (2026-09-30)
+
+**Workspace rule, revised twice after contact with real images.**
+`base_commit` must be an ancestor of HEAD. Files whose **contents**
+differ from `base_commit` (compared by blob hash) must be top-level
+packaging or test-configuration files (`setup.py`, `setup.cfg`,
+`tox.ini`, `pyproject.toml`, `pytest.ini`, `requirements*.txt`).
+Permission-only changes are ignored. Anything else refuses the task,
+and the error names up to 10 files. Changed files are recorded as
+`image_environment_changes`. Reason: the harness tests the image's
+tree, so the agent must see exactly that, and must never see code that
+differs from the task's (results entry #8).
+
+**Harness outcome mapping.** "Not applied" in report.json is decided by
+`run_instance.log`: `>>>>> Patch Apply Failed` → `patch_apply_failed`;
+`>>>>> Applied Patch` → `tests_errored`; neither → `harness_error`.
+
+**Keyword selection: known weakness, kept as the baseline.** It can
+choose no files, or an irrelevant one, when the issue names no paths or
+classes (results entry #8). Kept unchanged so the December localiser
+has a fixed baseline to beat; flagging weak selections is left to that
+work.
+
 ---
 
 ## Environment — development machine

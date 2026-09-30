@@ -95,18 +95,36 @@ def read_summary(path: Path) -> dict:
     return json.loads(Path(path).read_text())
 
 
-def outcome_from_report(report: dict) -> tuple[Outcome, SuiteResults | None]:
+# Markers the harness writes to run_instance.log when applying a patch
+# [PRIMARY — swebench 5.0.2 harness/constants/__init__.py].
+APPLY_PATCH_PASS = ">>>>> Applied Patch"
+APPLY_PATCH_FAIL = ">>>>> Patch Apply Failed"
+
+
+def outcome_from_report(report: dict, run_log: str | None = None
+                        ) -> tuple[Outcome, SuiteResults | None]:
     """Map one task's report.json entry to exactly one outcome.
 
     Order matters: a patch that did not apply has no meaningful test
     results, so that check comes before resolved/unresolved.
+
+    report.json's `patch_successfully_applied` is False whenever the harness
+    found no parseable test results, not only when the patch failed to apply
+    [PRIMARY — swebench 5.0.2 harness/grading.py, get_logs_eval]. A patch that
+    applies cleanly and then crashes the test run looks the same (results
+    entry #8). The task's run_instance.log says which it was, so it decides.
+    Without the log, the old, ambiguous label is kept.
     """
     if report.get("infra_failure"):
         return Outcome.HARNESS_ERROR, None
     if report.get("patch_is_None") or not report.get("patch_exists"):
         return Outcome.EMPTY_PATCH, None
     if not report.get("patch_successfully_applied"):
-        return Outcome.PATCH_APPLY_FAILED, None
+        if run_log is None or APPLY_PATCH_FAIL in run_log:
+            return Outcome.PATCH_APPLY_FAILED, None
+        if APPLY_PATCH_PASS in run_log:
+            return Outcome.TESTS_ERRORED, None
+        return Outcome.HARNESS_ERROR, None  # neither marker: cannot tell, do not guess
     ts = report["tests_status"]
     suite = SuiteResults(
         fail_to_pass_passed=ts["FAIL_TO_PASS"]["success"],
@@ -117,11 +135,13 @@ def outcome_from_report(report: dict) -> tuple[Outcome, SuiteResults | None]:
     return (Outcome.RESOLVED if report["resolved"] else Outcome.UNRESOLVED), suite
 
 
-def read_report(path: Path, instance_id: str) -> tuple[Outcome, SuiteResults | None]:
+def read_report(path: Path, instance_id: str, run_log: Path | None = None
+                ) -> tuple[Outcome, SuiteResults | None]:
     data = json.loads(Path(path).read_text())
     if instance_id not in data:
         raise HarnessError(f"{path} has no entry for {instance_id}")
-    return outcome_from_report(data[instance_id])
+    text = Path(run_log).read_text(errors="replace") if run_log else None
+    return outcome_from_report(data[instance_id], text)
 
 
 def parse_timing(log_path: Path) -> Timing:

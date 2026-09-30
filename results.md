@@ -29,6 +29,7 @@ exclusions**, and each is counted and reported separately:
 | Job hit the wall-clock limit | failure |
 | Harness errored | failure |
 | Model API failed (network, HTTP error, bad response) | failure |
+| Patch applied, but the test run produced no results (crash, timeout) | failure |
 
 A run that excludes its failures is not a measurement.
 
@@ -522,3 +523,76 @@ it was not scored and is not counted below.
 **Limits:** one task, two scored attempts. Not a resolve rate.
 
 **Running total of model spend:** about $0.007 (entries #5–#7).
+
+---
+
+## Entry #8 — The agent in CI, and what the first eight scored attempts show
+
+**Date:** 2026-09-30
+**Question:** Does the agent run end to end in GitHub Actions, and where
+does it fail?
+**Answer:** Yes: 6 CI attempts over two runs, with the model reached
+without a VPN. Across all 8 scored attempts on the dev split, **both
+resolves came from tasks where the right file was shown; every task
+where it wasn't failed.**
+**Runs:** `ci-agent-1` (run 36673499717, commit d39fc79) and
+`ci-agent-2` (run 36674272992, commit 8648578). `deepseek-flash`,
+thinking off, ADR-0014 limits.
+
+| Run | Task | Outcome as recorded | Gold file shown | In / cached / out | Billed |
+| --- | --- | --- | --- | --- | --- |
+| ci-agent-1 | django-13343 | patch_apply_failed → **actually tests_errored** | yes | 27,522 / 27,388 / 641 | $0.00049 |
+| ci-agent-1 | django-13809 | patch_apply_failed | **no files chosen** | 389 / 0 / 4,096 (cut off) | $0.00252 |
+| ci-agent-1 | sphinx-8621 | patch_apply_failed | no | 24,842 / 0 / 345 | $0.00393 |
+| ci-agent-1 | sphinx-9658 | unresolved | no | 27,746 / 0 / 372 | $0.00439 |
+| ci-agent-2 | django-14017 | **resolved** | yes | 25,801 / 0 / 338 | $0.00407 |
+| ci-agent-2 | sphinx-8621 | patch_apply_failed | no | 24,842 / 24,704 / 395 | $0.00033 |
+
+All [MEASURED]. `ci-agent-1` was dispatched with all five tasks.
+django-14017 was refused there at $0 by the workspace check (see the
+image findings below).
+
+### Findings
+- **CI reaches DeepSeek without a VPN**, so the local VPN requirement
+  doesn't apply to published runs.
+- **Localisation decided every outcome so far.** Gold file shown: 2
+  tasks, which produced both resolves (13343 local run 2, 14017) plus
+  one crash and one incomplete fix. Not shown: 3 tasks, all failed
+  [MEASURED, 8 attempts; a pattern, not yet a significant result].
+- **How keyword selection fails:** a behaviour-only issue
+  (sphinx-8621) matched one irrelevant file via the word `between`.
+  For 13809 nothing matched at all, and the model wrote 4,096 tokens
+  from memory and was cut off. In 8621 the model said it couldn't see
+  the file it needed. A single-call agent has no way to ask for it.
+- **A mislabel, found and corrected:** report.json's
+  `patch_successfully_applied` is False whenever no test results are
+  found, not only when a patch fails to apply [PRIMARY — swebench 5.0.2
+  `grading.py`]. The 13343 patch applied cleanly, then crashed Django
+  at import (`AttributeError: can't set attribute`, a read-only
+  property assigned in `__init__`). New outcome `tests_errored`,
+  decided from the harness's own log markers. The existing record
+  keeps its old label (ADR-0011).
+- **Exact matching refused correctly:** both 8621 failures quoted code
+  that isn't in any file shown to the model. The case for fuzzy
+  matching (ADR-0015 reversal condition) isn't met.
+- **SWE-bench image quirks:** Sphinx images commit packaging edits
+  (`setup.py` dependency pins, `-rA` in `tox.ini`). Some Django images
+  commit a `chmod -R 777`, so every file's permissions change while no
+  file's contents do. The workspace now compares file contents
+  (ADR-0015 amendment).
+- **Where the cache fields really are:** `prompt_cache_hit_tokens` /
+  `prompt_cache_miss_tokens` sit at the top level of `usage`, not
+  nested as the API reference shows. `prompt_tokens_details.cached_tokens`
+  also appears [MEASURED, reasoning-check call].
+- **Output includes reasoning:** 191 output tokens = 189 reasoning + 2
+  answer [MEASURED], so the cost formula is right. Closes entry #5's
+  open item.
+- **Cost:** a cold attempt costs $0.0039–0.0044; a warm (cached) one
+  about $0.0003–0.0005. Across all 8 scored attempts: $0.01642 spent ÷
+  2 resolved = **$0.0082 per fix** [MEASURED, n=8, mixed warm and cold,
+  off-peak].
+
+**Limits:** 5 tasks, uneven repeats (13343 ×3, 8621 ×2, others ×1).
+Not a resolve rate.
+
+**Running total of model spend:** about $0.023.
