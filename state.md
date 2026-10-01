@@ -1,6 +1,6 @@
 # Blindspots — current state
 
-**Last updated 2026-09-30.** Read this first in a new session. It says
+**Last updated 2026-10-02.** Read this first in a new session. It says
 where the project stands, what is decided, what is still open, and
 which older material is stale.
 
@@ -112,6 +112,36 @@ benchmark has been run yet.
   Model spend to date about $0.023.
   Next: Week 3, starting with a proper five-task, three-repeat run.
   The main open question: how much localisation limits the resolve rate.
+
+- **Week 3 handoff (2026-10-02) — start here in the next session.**
+  All Week 2 work is pushed (latest `e035ab3`). Week 3 design approved
+  by Malay on 2026-10-02:
+  1. **Adapter cross-check first** (Week 3 item 2, "verify cache
+     hits"): if `prompt_tokens_details.cached_tokens` is present it
+     must equal top-level `prompt_cache_hit_tokens`, or the response is
+     refused. $0, unit tests only.
+  2. **Cache-busting option.** DeepSeek has no switch to disable
+     caching (automatic, best effort [PRIMARY — context-caching
+     guide]). A config option puts a unique marker at the very start
+     of the prompt so no earlier prefix can match; it is part of the
+     config hash. This is the controlled "caching disabled" condition
+     for October-plan Week 3 item 4.
+  3. **Report cold and warm separately, never averaged.** CI runs
+     matrix jobs in parallel, so repeats of one task launched together
+     all start cold. Run repeats as separate dispatches a few minutes
+     apart: repeat 1 cold, repeats 2–3 warm.
+  4. Runs: 5 dev tasks × 3 repeats, caching on (three dispatches);
+     5 tasks × 1, cache busted. Then results entry #9 (cost per task
+     with a spread; cold vs warm vs busted; cache hit rate;
+     localisation on ~20 more attempts) and rebuild `budget.md` from
+     measured numbers.
+  Cost: about $0.05–0.10 total [ESTIMATE — cold/busted ~$0.004 and
+  warm ~$0.0004 per attempt, from entries #7–#8]. Scope guard: do not
+  improve the agent in Week 3; the localisation weakness waits for the
+  December localiser (ADR-0015 amendment).
+  Still open for Week 4: permanent home for CI records (artifacts
+  expire after 90 days, ADR-0012); mini-swe-agent baseline; README
+  numbers.
 
 ---
 
