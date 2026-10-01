@@ -44,16 +44,24 @@ class Attempt:
     diagnostics: dict[str, Any] = field(default_factory=dict)
 
 
-def agent_config(limits: Limits) -> dict[str, Any]:
-    """Everything that shapes the agent's behaviour, for the config hash."""
-    return {"agent": "simple", "model": MODEL, "settings": dict(simple.SETTINGS),
-            "limits": limits.model_dump(),
-            "selection": {"content_budget_bytes": ctx.CONTENT_BUDGET_BYTES,
-                          "tree_budget_bytes": ctx.TREE_BUDGET_BYTES,
-                          "max_files": ctx.MAX_FILES}}
+def agent_config(limits: Limits, cache_bust: bool = False) -> dict[str, Any]:
+    """Everything that shapes the agent's behaviour, for the config hash.
+
+    cache_bust appears only when on, so the default (caching on) config keeps
+    the same hash it had in Week 2 and stays comparable with entries #7-#8.
+    """
+    cfg = {"agent": "simple", "model": MODEL, "settings": dict(simple.SETTINGS),
+           "limits": limits.model_dump(),
+           "selection": {"content_budget_bytes": ctx.CONTENT_BUDGET_BYTES,
+                         "tree_budget_bytes": ctx.TREE_BUDGET_BYTES,
+                         "max_files": ctx.MAX_FILES}}
+    if cache_bust:
+        cfg["cache_bust"] = True
+    return cfg
 
 
-def attempt(task: Task, provider, limits: Limits, repos_root: Path) -> Attempt:
+def attempt(task: Task, provider, limits: Limits, repos_root: Path,
+            cache_bust: bool = False) -> Attempt:
     started = datetime.now(timezone.utc)
     repo = prepare(task, repos_root)
     acct = Accountant(provider, limits, model=MODEL)
@@ -65,7 +73,7 @@ def attempt(task: Task, provider, limits: Limits, repos_root: Path) -> Attempt:
                        started_at=started, finished_at=datetime.now(timezone.utc), **kw)
 
     try:
-        res = simple.solve(task, repo, acct)
+        res = simple.solve(task, repo, acct, cache_bust=cache_bust)
     except LimitBreached as e:
         return done(patch="", outcome=outcome_for(e.breach), breach=e.breach, error=str(e))
     except ProviderError as e:
@@ -73,6 +81,11 @@ def attempt(task: Task, provider, limits: Limits, repos_root: Path) -> Attempt:
 
     diag = {"agent_status": res.status, "selection": res.selection,
             "image_environment_changes": environment_changes(task, repo), **res.diagnostics}
+    if cache_bust:
+        # The check that the busted condition really was uncached. Recorded,
+        # not enforced: a non-zero here means the attempt is excluded from
+        # the "busted" figures, and the marker design needs another look.
+        diag["cache_bust_verified"] = acct.usage().cached_input_tokens == 0
     if res.status == "patch":
         return done(patch=res.patch, outcome=None, diagnostics=diag)
     if res.status == "no_edits":
@@ -81,10 +94,11 @@ def attempt(task: Task, provider, limits: Limits, repos_root: Path) -> Attempt:
 
 
 def attempt_all(tasks: list[Task], provider, limits: Limits, repos_root: Path,
-                report: Callable[[Attempt], None] = lambda a: None) -> dict[str, Attempt]:
+                report: Callable[[Attempt], None] = lambda a: None,
+                cache_bust: bool = False) -> dict[str, Attempt]:
     out = {}
     for t in tasks:
-        a = attempt(t, provider, limits, repos_root)
+        a = attempt(t, provider, limits, repos_root, cache_bust=cache_bust)
         report(a)
         out[t.instance_id] = a
     return out

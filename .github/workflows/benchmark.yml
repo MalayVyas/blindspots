@@ -26,6 +26,10 @@ on:
       instances:
         description: "Task IDs separated by spaces, or 'all' for the whole dev split"
         default: all
+      cache_bust:
+        description: "agent sources only: random marker first in every prompt, so nothing is served from cache (Week 3)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -39,6 +43,7 @@ env:
   SOURCE: ${{ inputs.source }}
   RUN_ID: ${{ inputs.run_id }}
   INSTANCES: ${{ inputs.instances }}
+  CACHE_BUST: ${{ inputs.cache_bust }}
   # Print Python output as it happens, so log lines appear in order.
   PYTHONUNBUFFERED: "1"
 
@@ -127,8 +132,10 @@ jobs:
           # Only this step sees the key, and only agent sources use it.
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
         run: |
+          bust=""
+          if [ "$CACHE_BUST" = "true" ]; then bust="--cache-bust"; fi
           python -m blindspots.run --run-id "$RUN_ID" --source "$SOURCE" \
-            --instances "${{ matrix.instance }}" --workdir "$WORKDIR"
+            --instances "${{ matrix.instance }}" --workdir "$WORKDIR" $bust
 
       - name: Upload record, harness logs and package versions
         if: always()

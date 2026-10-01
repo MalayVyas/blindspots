@@ -270,3 +270,31 @@ def test_workspace_refuses_wrong_commit(repo, tmp_path):
     (root / t.instance_id / "mypkg" / "calc.py").write_text("changed\n")
     with pytest.raises(WorkspaceError, match="changed since"):
         prepare(t, root)
+
+
+# ---------------------------------------------------------------- cache busting (Week 3)
+
+def run_busted(repo):
+    model = FakeModel(GOOD_REPLY)
+    acct = Accountant(model, Limits(), model="deepseek-flash")
+    return simple.solve(task(repo), repo, acct, cache_bust=True), model
+
+
+def test_cache_bust_marker_comes_first_and_differs_each_attempt(repo):
+    _, plain, _ = run(repo, GOOD_REPLY)
+    res1, m1 = run_busted(repo)
+    res2, m2 = run_busted(repo)
+    s0, s1, s2 = (m.seen[0][0]["content"] for m in (plain, m1, m2))
+    assert s1.endswith(s0) and s2.endswith(s0)       # system prompt itself unchanged
+    assert s1[:8] != s2[:8]                           # different from the first characters
+    assert res1.diagnostics["cache_bust_marker"] == s1.split()[0]
+    assert len(res1.diagnostics["cache_bust_marker"]) == 32
+    # Everything after the system message is identical to the unbusted call.
+    assert m1.seen[0][1:] == plain.seen[0][1:]
+
+
+def test_cache_bust_leaves_prompt_hashes_alone(repo):
+    res_plain, _, _ = run(repo, GOOD_REPLY)
+    res_bust, _ = run_busted(repo)
+    assert res_plain.prompt_hashes == res_bust.prompt_hashes   # same prompt files (ADR-0008)
+    assert "cache_bust_marker" not in res_plain.diagnostics

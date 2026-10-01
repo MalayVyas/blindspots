@@ -89,3 +89,34 @@ def test_scored_patch_keeps_usage_and_diagnostics(no_prepare, tmp_path):
 def test_agent_config_changes_hash_when_limits_change():
     from blindspots.record import config_hash
     assert config_hash(att.agent_config(Limits())) != config_hash(att.agent_config(Limits(max_calls=6)))
+
+
+def test_cache_bust_changes_hash_only_when_on():
+    from blindspots.record import config_hash
+    # Off: identical to the Week 2 config, so its hash is unchanged.
+    assert att.agent_config(Limits()) == att.agent_config(Limits(), cache_bust=False)
+    assert "cache_bust" not in att.agent_config(Limits())
+    assert config_hash(att.agent_config(Limits())) != config_hash(att.agent_config(Limits(), cache_bust=True))
+
+
+class WarmModel(FakeModel):
+    """Reports 128 of 500 input tokens served from cache."""
+    def complete(self, messages, **kw):
+        c = super().complete(messages, **kw)
+        u = c.usage.model_copy(update={"cache_hit_tokens": 128, "cache_miss_tokens": 372})
+        return c.model_copy(update={"usage": u})
+
+
+@pytest.mark.parametrize("provider, verified", [
+    (FakeModel(GOOD_REPLY), True),     # 0 cache-hit tokens: the bust worked
+    (WarmModel(GOOD_REPLY), False),    # any hit at all: flagged, not hidden
+])
+def test_cache_bust_is_verified_from_reported_hits(no_prepare, tmp_path, provider, verified):
+    a = att.attempt(task(no_prepare), provider, Limits(), tmp_path, cache_bust=True)
+    assert a.diagnostics["cache_bust_verified"] is verified
+    assert len(a.diagnostics["cache_bust_marker"]) == 32
+
+
+def test_unbusted_attempt_has_no_bust_diagnostics(no_prepare, tmp_path):
+    a = att.attempt(task(no_prepare), FakeModel(GOOD_REPLY), Limits(), tmp_path)
+    assert "cache_bust_verified" not in a.diagnostics

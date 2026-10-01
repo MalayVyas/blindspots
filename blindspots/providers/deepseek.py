@@ -149,6 +149,17 @@ def _cache_fields(usage: dict[str, Any]) -> tuple[int, int]:
     hit, miss = found[0]
     if hit is None or miss is None:
         raise ProviderError(f"only one of the cache fields is present: hit={hit}, miss={miss}")
+
+    # Second witness (Week 3 item 2). DeepSeek also reports the OpenAI-style
+    # usage.prompt_tokens_details.cached_tokens (results entry #7). It is not
+    # guaranteed, so its absence is fine; but when present it is an
+    # independent count of the same thing, and a disagreement means one of
+    # the two is wrong and the cost cannot be trusted. Refuse the response.
+    cached = nested.get("cached_tokens")
+    if cached is not None and int(cached) != int(hit):
+        raise ProviderError(
+            f"cache fields disagree: prompt_cache_hit_tokens={hit}, "
+            f"prompt_tokens_details.cached_tokens={cached}")
     return int(hit), int(miss)
 
 

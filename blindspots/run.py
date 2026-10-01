@@ -210,7 +210,7 @@ def check_against_summary(records: list[RunRecord], summary: dict) -> None:
 
 # ---------------------------------------------------------------- agent
 
-def run_agent(ids: list[str], workdir: Path) -> dict:
+def run_agent(ids: list[str], workdir: Path, cache_bust: bool = False) -> dict:
     """Prepare every workspace first, so a Docker or commit problem stops the
     run before any money is spent; then one agent job per task."""
     from blindspots.accountant import Limits
@@ -234,7 +234,7 @@ def run_agent(ids: list[str], workdir: Path) -> dict:
               f"{a.usage.input_tokens:,} in / {a.usage.output_tokens:,} out")
 
     with provider:
-        return attempt_all(tasks, provider, Limits(), repos, report)
+        return attempt_all(tasks, provider, Limits(), repos, report, cache_bust=cache_bust)
 
 
 # ---------------------------------------------------------------- main
@@ -249,7 +249,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--max-workers", type=int, default=1)
     ap.add_argument("--instances", nargs="+", metavar="ID",
                     help="run only these tasks (must be in the split); default: all")
+    ap.add_argument("--cache-bust", action="store_true",
+                    help="agent sources only: a random marker at the start of every "
+                         "prompt, so no call can hit the cache (Week 3)")
     args = ap.parse_args(argv)
+    if args.cache_bust and args.source not in AGENT_SOURCES:
+        raise RunnerError("--cache-bust only applies to agent sources")
 
     os.environ["HF_DATASETS_OFFLINE"] = "1"  # before anything imports datasets
     workdir = args.workdir.expanduser().resolve()
@@ -269,11 +274,11 @@ def main(argv: list[str] | None = None) -> int:
 
     attempts = None
     if args.source in AGENT_SOURCES:
-        attempts = run_agent(ids, workdir)
+        attempts = run_agent(ids, workdir, cache_bust=args.cache_bust)
         patches = {i: attempts[i].patch for i in ids}
         from blindspots.agent.attempt import agent_config
         from blindspots.accountant import Limits
-        config.update(agent_config(Limits()))
+        config.update(agent_config(Limits(), cache_bust=args.cache_bust))
     else:
         patches = patches_for(args.source, ids)
 

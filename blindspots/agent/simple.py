@@ -11,13 +11,24 @@ Prompt layout (step 3, decision 3), stable parts first so they can be cached:
     [4] user         prompts/simple/instruction.txt  the only role-specific part
 
 Parts 1-3 are what December's five roles will share; each role changes only
-part 4. Nothing that varies between runs (time, run ID) appears anywhere.
+part 4. Nothing that varies between runs (time, run ID) appears anywhere --
+except the cache-bust marker below, which exists to break exactly that.
+
+Cache busting (Week 3 item 4). DeepSeek caching is automatic and cannot be
+switched off [PRIMARY -- context-caching guide], and it matches prompts from
+the first token. So the "caching disabled" condition puts a fresh random
+marker at the very start of the system message: no earlier prompt shares
+even its first token block, so nothing can be served from cache. The marker
+is per attempt, not per run, so attempts within one run cannot warm each
+other either. Whether it worked is checked, not assumed: a busted attempt
+must report zero cache-hit tokens on every call.
 """
 
 from __future__ import annotations
 
 import hashlib
 import re
+import secrets
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -59,10 +70,17 @@ def render_files(repo_dir: Path, paths: list[str]) -> str:
     return "\n\n".join(blocks)
 
 
+def cache_bust_marker() -> str:
+    """128 random bits. The random hex comes first so the prompt's first
+    tokens differ; the explanation after it stops the model reading meaning
+    into it."""
+    return f"{secrets.token_hex(16)} (cache-bust marker: ignore this line)\n\n"
+
+
 def build_messages(prompts: dict[str, str], tree: str, files: str,
-                   issue: str) -> list[dict[str, str]]:
+                   issue: str, marker: str = "") -> list[dict[str, str]]:
     return [
-        {"role": "system", "content": prompts["system"]},
+        {"role": "system", "content": marker + prompts["system"]},
         {"role": "user", "content": fill(prompts["context"], tree=tree, files=files)},
         {"role": "user", "content": fill(prompts["issue"], issue=issue)},
         {"role": "user", "content": prompts["instruction"]},
@@ -81,7 +99,7 @@ class AgentResult:
 
 
 def solve(task: Task, repo_dir: Path, acct: Accountant, *,
-          prompt_dir: Path = PROMPT_DIR) -> AgentResult:
+          prompt_dir: Path = PROMPT_DIR, cache_bust: bool = False) -> AgentResult:
     """One attempt at one task. LimitBreached and ProviderError propagate:
     the runner turns them into spend_ceiling / wall_clock_limit /
     provider_error records with the accountant's partial transcript."""
@@ -89,8 +107,10 @@ def solve(task: Task, repo_dir: Path, acct: Accountant, *,
     hashes = prompt_hashes(prompts)
     all_files = repo_files(repo_dir)
     sel = ctx.select(repo_dir, all_files, task.problem_statement)
+    marker = cache_bust_marker() if cache_bust else ""
     messages = build_messages(prompts, ctx.tree(all_files, sel.files),
-                              render_files(repo_dir, sel.files), task.problem_statement)
+                              render_files(repo_dir, sel.files), task.problem_statement,
+                              marker)
     selection = {"files": sel.files, "content_bytes": sel.content_bytes,
                  "skipped_for_budget": sel.skipped_for_budget,
                  "reasons": {f: sel.reasons[f] for f in sel.files}}
@@ -101,6 +121,8 @@ def solve(task: Task, repo_dir: Path, acct: Accountant, *,
         # Localisation diagnostic: computed now, AFTER the call, from the gold
         # patch. It is stored, never shown to the model.
         diag = {"localisation": ctx.localisation(task.gold_patch, sel.files)}
+        if cache_bust:
+            diag["cache_bust_marker"] = marker.split()[0]
         return AgentResult(patch, status, error, reply, selection, hashes, diag)
 
     blocks = edits.parse(reply)

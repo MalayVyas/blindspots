@@ -170,3 +170,36 @@ def test_malformed_body_raises():
 def test_key_never_in_completion():
     c = client(replying(body())).complete(MSGS, **ARGS)
     assert "test-key" not in c.model_dump_json()
+
+
+# ---- Week 3 item 2: cross-check against prompt_tokens_details.cached_tokens
+
+def _with_cached(cached, hit=64, miss=56):
+    u = usage(hit=hit, miss=miss, nested=False)   # the shape DeepSeek really sends
+    u["prompt_tokens_details"] = {"cached_tokens": cached}
+    return u
+
+
+def test_cached_tokens_agreeing_is_accepted():
+    c = client(lambda r: httpx.Response(200, json=body(_with_cached(64)))).complete(MSGS, **ARGS)
+    assert c.usage.cache_hit_tokens == 64
+
+
+def test_cached_tokens_disagreeing_is_refused():
+    with pytest.raises(ProviderError, match="cached_tokens=63"):
+        client(lambda r: httpx.Response(200, json=body(_with_cached(63)))).complete(MSGS, **ARGS)
+
+
+def test_cached_tokens_absent_is_fine():
+    u = usage(nested=False)
+    c = client(lambda r: httpx.Response(200, json=body(u))).complete(MSGS, **ARGS)
+    assert c.usage.cache_hit_tokens == 64
+
+
+def test_cached_tokens_zero_must_match_zero_hits():
+    # A cold call: both fields say 0. A 0 against a non-zero hit is refused.
+    ok = _with_cached(0, hit=0, miss=120)
+    c = client(lambda r: httpx.Response(200, json=body(ok))).complete(MSGS, **ARGS)
+    assert c.usage.cache_hit_tokens == 0
+    with pytest.raises(ProviderError, match="disagree"):
+        client(lambda r: httpx.Response(200, json=body(_with_cached(0)))).complete(MSGS, **ARGS)
