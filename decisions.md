@@ -937,6 +937,66 @@ work.
 
 ---
 
+## ADR-0016: Verifying cache hits, and a cache-busted condition (Week 3)
+
+**Date:** 2026-10-02 · **Status:** accepted
+
+### Context
+
+October-plan Week 3 needs cache hits verified from the API response
+(item 2) and a measurement with "caching disabled" (item 4). DeepSeek
+caching is automatic and best effort, with no switch to turn it off
+[PRIMARY — context-caching guide]. Cache entries also outlive a single
+session: a dispatch planned as "cold" was already 99% cached from runs
+two days earlier (results entry #9).
+
+### Options considered
+
+| Option | What it lacks |
+| --- | --- |
+| Trust `prompt_cache_hit_tokens` alone | One unchecked number decides the cost |
+| Wait for the cache to expire between conditions | Expiry has no stated time; observed lifetime is at least ~43 hours. Not controllable |
+| Change model or settings between conditions | Changes more than caching; confounds the comparison |
+| **Random marker first in each prompt, plus a second cache field as a cross-check** | Adds ~30 input tokens per busted call; the prompt text differs slightly from the cached condition |
+
+### Decision
+
+1. **Cross-check.** When `usage.prompt_tokens_details.cached_tokens` is
+   present it must equal `prompt_cache_hit_tokens`, or the adapter
+   refuses the response (`ProviderError`). Its absence is accepted:
+   the field is not guaranteed.
+2. **Cache busting.** `--cache-bust` (CLI) / `cache_bust` (workflow
+   input) puts 128 random bits, then a one-line "ignore this" note, at
+   the very start of the system message. New per attempt, not per run,
+   so attempts in one run cannot warm each other.
+3. **Verified, not assumed.** Each busted attempt records
+   `cache_bust_verified` — true only if zero cached tokens were
+   reported. A false value excludes the attempt from busted figures.
+4. **Hashes.** Prompt-file hashes are unchanged (ADR-0008). The
+   `cache_bust` key enters the config only when on, so the default
+   config keeps its Week 2 hash.
+5. **Classification.** Attempts are classed cold, warm or busted by
+   their measured cache-hit share (`scripts/week3_report.py`), never
+   by dispatch order.
+
+### Consequences
+
+- Entry #9: 5/5 busted attempts reported 0 cached tokens; 20/20 raw
+  responses passed the cross-check.
+- The marker adds about 0.1% to a 27K-token prompt. One task
+  (django-14017) gave an identical 152-token answer with and without
+  it [MEASURED, n=1 busted].
+- There is still no measured "first-ever" cold attempt; the busted
+  condition stands in for it.
+
+### Reversal condition
+
+DeepSeek documents a way to disable caching; or any busted attempt
+reports a cache hit (then put the marker inside every message, or
+move to the documented switch).
+
+---
+
 ## Environment — development machine
 
 **Recorded 2026-09-26.** Reproducibility baseline for every local

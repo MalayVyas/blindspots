@@ -596,3 +596,80 @@ image findings below).
 Not a resolve rate.
 
 **Running total of model spend:** about $0.023.
+
+---
+
+## Entry #9 — Caching measured: cold vs warm, three repeats (Week 3)
+
+**Date:** 2026-10-02 (runs 2026-10-01 22:52–23:17 UTC, all off-peak)
+**Question:** What does an attempt cost with and without the cache,
+how much of the input is served from cache, and how much does it vary
+between repeats?
+**Answer:** With 25–28K input tokens, a cold attempt costs **$0.0041**
+and a warm one **$0.0003**, about 13x less. 99.2% of warm input tokens
+came from the cache. Resolved 1/20.
+**Setup:** commit 630bc4c, `deepseek-flash`, thinking off, temperature
+0, `max_tokens` 4,096, ADR-0014 limits, prompts unchanged (same prompt
+hashes on all 20). Runs `ci-w3-cache-1/2/3` (caching on, dispatched
+~10 min apart) and `ci-w3-bust-1` (`--cache-bust`, ADR-0016). Each
+attempt is labelled cold or warm by its measured cache-hit share
+(`scripts/week3_report.py`). Busted attempts carry about 30 extra input
+tokens from the marker.
+
+| Class | Attempts | Mean / attempt | 95% interval | Range |
+| --- | --- | --- | --- | --- |
+| Warm (caching on) | 15 | $0.00060 | $0.00027–0.00115 | $0.00012–0.00248 |
+| Busted (cold) | 5 | $0.00381 | $0.00315–0.00427 | $0.00252–0.00438 |
+| Warm, excl. 13809 | 12 | $0.00032 | $0.00023–0.00043 | $0.00013–0.00053 |
+| Busted, excl. 13809 | 4 | $0.00413 | $0.00391–0.00435 | $0.00386–0.00438 |
+
+Intervals: bootstrap, resampling tasks rather than attempts, 10,000
+draws. Reference cost equals billed cost on all 20 (none at peak).
+[MEASURED]
+
+| Task | Warm ×3 | Busted | Ratio | Gold file shown | Outcomes (warm; busted) |
+| --- | --- | --- | --- | --- | --- |
+| django-13343 | $0.00040–0.00053 | $0.00438 | 9.3x | yes | unresolved, tests_errored ×2; **resolved** |
+| django-13809 | $0.00012–0.00248 | $0.00252 | 1.5x | no files chosen | patch_apply_failed ×2, empty_patch; patch_apply_failed |
+| django-14017 | $0.00020 ×3 | $0.00397 | 20.0x | yes | unresolved ×3; unresolved |
+| sphinx-8621 | $0.00013–0.00038 | $0.00386 | 13.0x | no | patch_apply_failed ×4 |
+| sphinx-9658 | $0.00031–0.00034 | $0.00431 | 13.3x | no | unresolved ×4 |
+
+### Findings
+- **Cache verified two ways.** All 5 busted attempts reported 0 cached
+  tokens (`cache_bust_verified`). In all 20 raw responses,
+  `prompt_tokens_details.cached_tokens` equalled
+  `prompt_cache_hit_tokens`.
+- **Hit rate 99.2%** of input tokens on warm attempts (316,401 /
+  318,900). The uncached remainder is a fixed tail per task (134 tokens
+  on 13343, as in entry #7).
+- **There was no cold dispatch.** `ci-w3-cache-1` was already 99%
+  cached from the 30 September runs, so the cache lasted at least about
+  43 hours. Classing attempts by measured hits instead of dispatch
+  order is required, not optional.
+- **Caching moves the cost lever from input to output.** Output is 4%
+  of a busted attempt's cost and 67% of a warm one's. A hit costs
+  $0.003/M against $0.15/M for a miss [PRIMARY — price table
+  `deepseek-2026-09-29`].
+- **django-13809:** no files chosen, 389-token prompt, model cut off at
+  4,096 tokens in 3 of 4 attempts. Caching can't help a task where
+  output dominates. Candidate for the December localiser: no files
+  found, no call.
+- **Response time** 1.4–3.4 s per call, cached or not; 13.5–15.3 s for
+  the cut-off calls. No speed-up from caching observed.
+- **Variation between repeats:** cost is tight within a task, except
+  where the output length swings (8621: 62–478 tokens). Outcomes vary:
+  13343 gave unresolved, tests_errored, tests_errored, resolved. 14017
+  gave a 152-token answer four times and was unresolved each time,
+  though it resolved on 2026-09-30 with identical input (entry #8).
+- **Localisation:** gold file shown in 8 of 20 attempts (1 resolved),
+  not shown in 12 (0 resolved). Since entry #7: 3/12 resolved when
+  shown, 0/16 when not (one-sided Fisher exact p ≈ 0.07, treating
+  attempts as independent) [ESTIMATE].
+- **Resolve rate 1/20 = 5%** (Wilson 95% interval 0.9–23.6%). **Cost
+  per fix $0.028** — one fix, so no meaningful interval.
+
+**Limits:** 5 tasks; one busted attempt per task; all off-peak; one
+model.
+
+**Running total of model spend:** about $0.051.

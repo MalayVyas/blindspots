@@ -1,6 +1,6 @@
 # Blindspots — current state
 
-**Last updated 2026-10-02.** Read this first in a new session. It says
+**Last updated 2026-10-02 (Week 3 complete).** Read this first in a new session. It says
 where the project stands, what is decided, what is still open, and
 which older material is stale.
 
@@ -142,6 +142,30 @@ benchmark has been run yet.
   Still open for Week 4: permanent home for CI records (artifacts
   expire after 90 days, ADR-0012); mini-swe-agent baseline; README
   numbers.
+
+- **Week 3 complete (2026-10-02), ahead of its 15 October start.**
+  ADR-0016: adapter cross-check (`cached_tokens` must equal
+  `prompt_cache_hit_tokens`) and `--cache-bust` / `cache_bust` workflow
+  input; `scripts/week3_report.py` classes attempts by measured cache
+  hits. Runs `ci-w3-cache-1/2/3` + `ci-w3-bust-1` at commit 630bc4c
+  (results entry #9): cold attempt **$0.0041**, warm **$0.0003**
+  (~13x), warm hit rate **99.2%**, busted verified 0 hits on 5/5,
+  resolved 1/20. Records downloaded to `runs/w3` (git-ignored).
+  Findings: the cache survived ~43 h, so no dispatch is reliably cold;
+  with caching on, output is 67% of cost; 13809 picks no files and burns
+  4,096 output tokens; localisation still decides every resolve
+  (3/12 shown vs 0/16 not, all attempts since entry #7).
+  Model spend to date about $0.051.
+  **Next: Week 4.** (a) Rebuild `budget.md` from entry #9 (Week 3
+  item 6, moved under the cut list). (b) mini-swe-agent baseline on the
+  same 5 tasks. (c) README with real numbers. (d) Permanent home for CI
+  records (artifacts expire after 90 days, ADR-0012). (e) Month review
+  of hours.
+  **Open, not yet decided:** each provider caches only its own prompts,
+  so a mixed-model team cannot share one warm prefix across roles. With
+  caching worth ~13x, the January comparison must measure this, not
+  assume it away — candidate amendment to ADR-0008 [JUDGEMENT].
+  Commit `scripts/week3_report.py` and these doc updates from WSL.
 
 ---
 
