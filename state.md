@@ -1,6 +1,6 @@
 # Blindspots — current state
 
-**Last updated 2026-10-02 (Week 3 complete).** Read this first in a new session. It says
+**Last updated 2026-10-02 (Week 3 complete; Week 4 designed).** Read this first in a new session. It says
 where the project stands, what is decided, what is still open, and
 which older material is stale.
 
@@ -184,6 +184,33 @@ benchmark has been run yet.
     (ADR-0007). The "full 50-task run" in December's timeline becomes
     "five-agent pipeline on the dev split, with intervals" (wide, n=5).
   Commit `scripts/week3_report.py` and these doc updates from WSL.
+
+- **Week 4 design (approved by Malay 2026-10-02) — start here.** Order:
+  1. **Record schema 3 with `agent_s`.** $0; good cloud-session task
+     (credit expires 5 Nov). First, so the baseline's records are born
+     in schema 3.
+  2. **Permanent home for CI records: GitHub Release assets.** One
+     `run-records` release, one tarball per run ID, uploaded by the
+     summary job. Needs an ADR. Reverse if assets hit a size limit →
+     Hugging Face. Must exist before the baseline runs (20 records =
+     2.4 MB [MEASURED]; mini's transcripts will be longer).
+  3. **mini-swe-agent baseline.** Version 2.4.6, stock config, prompts
+     and loop; a small model class routes its calls through our
+     DeepSeek adapter and token accountant, so cache fields and cost
+     are measured the same way as our agent's. The ADR states "stock
+     mini, our transport". Same $0.10 per-job cap; higher call limit
+     for this agent only (~75). Patches scored by our runner. 5 dev
+     tasks x 3 repeats on separate days (ADR-0008). About $0.15-0.35
+     total [ESTIMATE]. Expect mini to win (it can search the repo, and
+     localisation decides every outcome so far); do not improve our
+     agent in response.
+  4. **README with real numbers**, after the baseline; columns change
+     from "/50" to "/5 dev tasks".
+  5. **Month review:** about 15-30 h from 26 Sep to 2 Oct [stated].
+     Deliberate front-loading by Malay to build a buffer before the
+     November exams; Weeks 0-3 finished about 2.5 weeks early.
+  Stale: `october-plan.md` Week 4 items 1 and 4 are already done
+  (Week 3's 20 attempts; ADR-0001 to ADR-0016).
 
 ---
 
