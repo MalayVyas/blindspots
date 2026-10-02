@@ -80,10 +80,10 @@ Everything here is cheap and unblocks a decision.
 | 1 | ~~Check AWS plan status~~ **done — upgraded to Paid.** Still set a $5 Budgets alarm | 5m |
 | 2 | ~~Open Azure for Students~~ **done — $100 available** | — |
 | 3 | ~~Open DeepSeek API account~~ **done.** GitHub Student Developer Pack also claimed | — |
-| 4 | Record your PC's RAM, core count and free disk — **and the RAM/cores WSL2 actually gets**, which is what constrains Docker. Write both into `decisions.md` | 10m |
-| 5 | Confirm Monash 2027 Semester 1 dates | 10m |
-| 7 | **Blocking — do this first.** Create the **public** repo and connect it to Claude Code cloud sessions. Push README rewritten to the question form, plus `decisions.md`, `results.md`, `risks.md`, `solutions.md`, `budget.md`, `october-plan.md`. Until this exists the $100 credit cannot be spent | 1h |
-| 8 | **The spike** — see below | 2–3h |
+| 4 | ~~Record your PC's RAM, core count and free disk, and what WSL2 gets~~ **done** — 16 cores, 19 GiB RAM in WSL2, ~429 GB free on E: (`decisions.md`, Environment) | 10m |
+| 5 | ~~Confirm Monash 2027 Semester 1 dates~~ **done 2026-10-02** — exams 3 and 16 Nov; vacation 17 Nov to late Feb; Semester 4 from first week of March (R-16) | 10m |
+| 7 | ~~Create the public repo~~ **done** — github.com/MalayVyas/blindspots. Original text: **Blocking — do this first.** Create the **public** repo and connect it to Claude Code cloud sessions. Push README rewritten to the question form, plus `decisions.md`, `results.md`, `risks.md`, `solutions.md`, `budget.md`, `october-plan.md`. Until this exists the $100 credit cannot be spent | 1h |
+| 8 | ~~The spike~~ **done — green**, run 36218467955 (results entry #0) | 2–3h |
 
 ### The spike
 
