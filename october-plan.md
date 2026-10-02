@@ -241,8 +241,10 @@ patch, and three of them may not survive the cuts in `solutions.md`.
 
 ## What October hands to November
 
-November is exams, under 10 hours a week, and should be
-low-concentration work only: a second provider adapter, and tidying.
+November splits in two (dates confirmed 2026-10-02). **1–16 November
+is exams** (3 and 16 Nov): low-concentration work only — a second
+provider adapter, and tidying. **17–30 November is vacation** at ~10
+hours a week: the five-agent pipeline starts there.
 For that to be possible, October must end with a working scoreboard, a
 working single agent, a spend ceiling, verified caching, one measured
 cost figure, and the decisions written down.

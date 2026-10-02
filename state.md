@@ -311,15 +311,29 @@ suspect.
 
 ## Timeline, as revised
 
-Ship in December; February and March are semester months.
+Ship in December; finish by the end of February. Dates confirmed by
+Malay 2026-10-02 (R-16): exams 3 and 16 Nov 2026; vacation 17 Nov 2026
+to late Feb 2027; Semester 4 from the first week of March to June 2027.
+**Realistic capacity: ~10 hours a week throughout** (Malay also works),
+lower in exam weeks.
 
-| Month | Deliverable |
+| Period | Deliverable |
 | --- | --- |
-| **Oct** | Evaluation harness; single agent; spend ceiling; verified caching; **first measured cost per task**; mini-swe-agent baseline; ADRs |
-| **Nov** | Exams, under 10 hrs/week. Provider adapters only |
-| **Dec** | Five-agent pipeline; first full 50-task run with intervals; README with real numbers; demo video. **Demoable from here** |
+| **Oct** | Evaluation harness; single agent; spend ceiling; verified caching; **first measured cost per task**; mini-swe-agent baseline; ADRs. Cloud-session credit expires 5 Nov |
+| **1–16 Nov** | Exams (3 and 16 Nov), well under 10 hrs/week. Provider adapters only |
+| **17–30 Nov** | Vacation. Start the five-agent pipeline (two weeks earlier than first planned) |
+| **Dec** | Five-agent pipeline on the dev split, with intervals; README with real numbers; demo video. **Demoable from here.** Draw and commit the 150-task sample; re-budget |
 | **Jan** | Offline per-role benchmarks; headline comparison; contamination check |
-| **Feb–Mar** | Semester, under 10 hrs/week. GitHub Pages dashboard, write-up, optional AWS slice |
+| **Feb** | Vacation. Write-up, GitHub Pages dashboard; optional 150-task run if the budget allows. **Everything finished by end of February** |
+| **Mar–Jun** | Semester 4, under 10 hrs/week. Polish and job applications only; optional AWS slice |
+
+**Capacity check** [ESTIMATE]: about 4 weeks × 10 h left in October, ~10 h
+across the exam weeks, and ~15 vacation weeks × 10 h (17 Nov–end Feb)
+give roughly **200 hours** to the end of February. R-13's after-cuts guess
+was ~220 h [JUDGEMENT, unmeasured]. Tight but workable; Week 4's month
+review replaces this with real hours spent. If it slips, cut in this
+order: AWS slice, GitHub Pages dashboard, the optional 150-task run —
+never the December ship.
 
 The critical change from the original plan: **December is the ship
 date, not March.** Everything after it is improvement on something
