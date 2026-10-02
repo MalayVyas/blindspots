@@ -177,9 +177,12 @@ benchmark has been run yet.
     the Marketplace, which sponsored credits may not cover. Check in the
     Azure portal before December. If not: Sonnet in cash (~$64 central),
     a Microsoft model as the premium arm, or `deepseek-v4-pro`.
-  - **Timeline conflict:** project instructions put a "full 50-task run"
-    in December, but ADR-0007 keeps the 50 Mini tasks unseen until
-    February. Resolve before December.
+  - ~~Timeline conflict~~ **Resolved (2026-10-02, Malay):** December
+    runs use the dev split only. The 150-task sample is drawn and
+    committed in December but not run until the end of the project,
+    budget permitting. The 50 Mini tasks stay unseen until February
+    (ADR-0007). The "full 50-task run" in December's timeline becomes
+    "five-agent pipeline on the dev split, with intervals" (wide, n=5).
   Commit `scripts/week3_report.py` and these doc updates from WSL.
 
 ---
