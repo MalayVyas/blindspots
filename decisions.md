@@ -373,6 +373,18 @@ two-repository limit is stated as a limitation.
 **Consequence.** All 50 Mini tasks stay untouched until February.
 The dev split works for either test-set size.
 
+**Amendment (2026-10-02) — size decision moves to December.** Week 3
+measured single-call cost only (results entry #9); the expansion cost
+is dominated by calls per task, unique input per call and output,
+first measured on the five-agent pipeline in December (`budget.md`).
+So the size decision is taken after the first five-agent run, not after
+Week 3. **Stated intent (Malay):** a full 150-task run at the end of the
+project, if the budget permits; Mini's 50 stay the committed floor and
+are always reported separately. To keep the rules above intact, the
+150-task sample is **drawn and committed in December** by the seeded
+script, before any agent has run on a test task — even though the run
+itself comes last. The premium arm stays on Mini's 50 (cost).
+
 ---
 
 ## ADR-0008: Pre-registered comparison protocol
@@ -434,6 +446,16 @@ None. Changing this after results exist defeats its entire purpose.
 [PRIMARY — API reference], and outputs differ between identical calls
 at temperature 0 (results entry #5). The record's `seed` field holds
 the repeat number.
+
+### Clarification — repeats are separate days (2026-10-02)
+
+Repeats of a task are **separate dispatches on different days**, never
+parallel or back-to-back, and results report the agreement between
+repeats. Reason: within one 25-minute session django-14017 produced an
+identical 152-token answer four times (unresolved), while the same input
+resolved on 2026-09-30 (results entries #8–#9). Repeats close in time
+are not independent, so they would understate the spread. This adds a
+constraint before any comparison has run; it loosens nothing.
 
 ---
 

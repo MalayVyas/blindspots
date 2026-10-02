@@ -173,9 +173,10 @@ what makes every later experiment safe to run unattended.
 three-run spread and a stated cache hit rate. `budget.md` no longer
 contains estimated per-task costs.
 
-**Met 2026-10-02** (items 1–5) — results entry #9, ADR-0016. Item 1
-was already in place from Week 2 (ADR-0015 prompt layout). Item 6
-moved to Week 4 under the cut list.
+**Met 2026-10-02** — all six items. Results entry #9 (with wall-clock
+addendum), ADR-0016; `budget.md` rebuilt from measured numbers (item 6).
+Item 1 was already in place from Week 2 (ADR-0015 prompt layout). The
+5x signal was not triggered (`budget.md`).
 
 **Cut list:** item 6 moves to week 4. **Do not cut item 2** —
 unverified caching is worse than no caching, because you will believe a

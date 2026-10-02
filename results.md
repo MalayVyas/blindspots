@@ -673,3 +673,12 @@ draws. Reference cost equals billed cost on all 20 (none at peak).
 model.
 
 **Running total of model spend:** about $0.051.
+
+**Addendum (2026-10-02): wall-clock.** A scored attempt takes ~20–27 s:
+model call 1.4–3.4 s, harness evaluation 18.0–23.5 s, of which ~15 s is
+container teardown. Unscored attempts (no usable patch) take 1.8–15.5 s,
+almost all model time (overhead 0.1–0.3 s). Workspace preparation runs
+before the attempts and is not timed. Gap: scored records keep only the
+harness's timing, so agent time is read from the transcript's
+`latency_s`. An `agent_s` field needs record schema 3 (ADR-0011) — Week 4.
+[MEASURED]

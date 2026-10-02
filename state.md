@@ -54,7 +54,8 @@ benchmark has been run yet.
   locally (results entry #1, ADR-0010 addendum).
 - **Week 1 step 2 done (2026-09-29).** Dev split drawn from Verified
   outside Mini (ADR-0007 amendment): 3 django + 2 sphinx, committed
-  in `splits/dev_split.json`. Test-set size revisited after Week 3.
+  in `splits/dev_split.json`. Test-set size: now decided after the
+  first five-agent run (ADR-0007 amendment, 2026-10-02).
 - **Week 1 steps 3–5 done (2026-09-29).** Gold 5/5, empty 0/5,
   no-op 0/5 on the dev split (results entry #2). Next: step 7 (run
   record), then step 6 (CI matrix).
@@ -156,15 +157,29 @@ benchmark has been run yet.
   4,096 output tokens; localisation still decides every resolve
   (3/12 shown vs 0/16 not, all attempts since entry #7).
   Model spend to date about $0.051.
-  **Next: Week 4.** (a) Rebuild `budget.md` from entry #9 (Week 3
-  item 6, moved under the cut list). (b) mini-swe-agent baseline on the
-  same 5 tasks. (c) README with real numbers. (d) Permanent home for CI
-  records (artifacts expire after 90 days, ADR-0012). (e) Month review
-  of hours.
-  **Open, not yet decided:** each provider caches only its own prompts,
-  so a mixed-model team cannot share one warm prefix across roles. With
-  caching worth ~13x, the January comparison must measure this, not
-  assume it away — candidate amendment to ADR-0008 [JUDGEMENT].
+  **Week 3 closed out the same day:** `budget.md` rebuilt from entry #9
+  (central ~$175 for six months, high ~$770; the budget now hinges on
+  five-agent quantities first measured in December); 5x signal not
+  triggered; ADR-0007 amended (test-set size decided after the first
+  five-agent run; **Malay intends a full 150-task run at the end if
+  budget permits**, sample drawn and committed in December); ADR-0008
+  clarified (repeats on different days); R-07 updated; entry #9
+  wall-clock addendum.
+  **Next: Week 4.** (a) mini-swe-agent baseline on the 5 dev tasks.
+  (b) README with real numbers. (c) Permanent home for CI records
+  (artifacts expire after 90 days, ADR-0012). (d) Record schema 3 with
+  `agent_s`. (e) Month review of hours.
+  **Open:**
+  - Cross-provider caching: a mixed team can't share one warm prefix
+    across providers — measure it in January (candidate ADR-0008 note).
+  - **Can the $100 Azure for Students credit pay for Claude on Microsoft
+    Foundry?** Unverified; third-party models are often billed through
+    the Marketplace, which sponsored credits may not cover. Check in the
+    Azure portal before December. If not: Sonnet in cash (~$64 central),
+    a Microsoft model as the premium arm, or `deepseek-v4-pro`.
+  - **Timeline conflict:** project instructions put a "full 50-task run"
+    in December, but ADR-0007 keeps the 50 Mini tasks unseen until
+    February. Resolve before December.
   Commit `scripts/week3_report.py` and these doc updates from WSL.
 
 ---
