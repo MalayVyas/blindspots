@@ -1249,6 +1249,23 @@ If more than one attempt in five ends on a limit or as
 `provider_error`, revisit the limits and the transport before running
 repeats 2–3, never between the repeats of a task.
 
+### Note — cold and warm, pre-registered before the CI runs (2026-10-04)
+
+ADR-0016 classes attempts by measured cache hits, and Week 3's report
+called an attempt cold when under 10% of all its input was cached. That
+rule cannot be used for a multi-call agent: each step re-sends the
+attempt's own history, which the attempt itself has just cached. The
+smoke attempt `dev-mini-smoke-1` was 89.4% cached overall while its
+first call had 0 cached tokens [MEASURED].
+
+For agent:mini, an attempt is **cold if its first call reports 0 cached
+tokens and warm otherwise**: only the first call can show whether an
+earlier attempt warmed the cache. The cache-hit share of calls 2 and
+later is reported separately, as the within-attempt share. The first
+call is mini's stock first prompt, identical for every repeat of a task,
+so a repeat on a later day can be warm (results entry #9: the cache
+lasted at least about 43 hours).
+
 ### Note — installed without dependencies (2026-10-04)
 
 A normal install of `mini-swe-agent==2.4.6` would have downgraded

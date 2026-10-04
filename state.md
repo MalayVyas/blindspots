@@ -223,6 +223,19 @@ benchmark has been run yet.
      Expect mini to win (it can search the repo, and
      localisation decides every outcome so far); do not improve our
      agent in response.
+     **Built (2026-10-04), commit c2f0564 on branch `week4-mini`:**
+     ADR-0018, ADR-0014 amendment (prefix-aware estimate); mini
+     installed without dependencies via `scripts/install_mini.sh`
+     (litellm would downgrade the harness's filelock). 159 unit tests.
+     **Local smoke `dev-mini-smoke-1`** (django-13343, off-peak):
+     resolved, 12 calls, 58,254 in / 1,729 out, cache hits 89.4%
+     overall (call 1: 0), billed $0.00212, `agent_s` 23.6 s, cached
+     field cross-check 12/12, record 78,860 bytes [MEASURED, n=1]. It
+     goes into results entry #10 with the CI runs. Limits stay as in
+     ADR-0018: no retuning from one attempt.
+     Model spend to date about $0.053.
+     **Next:** push the branch, then dispatch `ci-mini-1/2/3`, one per
+     day (benchmark.yml; commands in the Phase 4 notes).
   4. **README with real numbers**, after the baseline; columns change
      from "/50" to "/5 dev tasks".
   5. **Month review:** about 15-30 h from 26 Sep to 2 Oct [stated].

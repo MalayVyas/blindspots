@@ -5,9 +5,10 @@
 # Manual only: Actions tab -> "benchmark" -> "Run workflow".
 # Never triggered automatically: from Week 2 a run spends real money.
 #
-# agent:simple calls DeepSeek with the DEEPSEEK_API_KEY repository secret.
-# Spending is bounded per task by the ADR-0014 ceiling ($0.10), so one
-# dispatch over the 5 dev tasks can spend at most $0.50. Only people with
+# agent:simple and agent:mini (ADR-0018) call DeepSeek with the
+# DEEPSEEK_API_KEY repository secret. Spending is bounded per task by the
+# ADR-0014 ceiling ($0.10, the same for both agents), so one dispatch over
+# the 5 dev tasks can spend at most $0.50. Only people with
 # write access can dispatch, and pull requests from forks never receive
 # secrets [PRIMARY — GitHub Actions docs].
 
@@ -19,7 +20,7 @@ on:
       source:
         description: "Patch source"
         type: choice
-        options: [gold, noop, empty, "agent:simple"]
+        options: [gold, noop, empty, "agent:simple", "agent:mini"]
         default: gold
       run_id:
         description: "New, unique run ID (e.g. ci-gold-1)"
@@ -28,7 +29,7 @@ on:
         description: "Task IDs separated by spaces, or 'all' for the whole dev split"
         default: all
       cache_bust:
-        description: "agent sources only: random marker first in every prompt, so nothing is served from cache (Week 3)"
+        description: "agent:simple only: random marker first in every prompt, so nothing is served from cache (Week 3)"
         type: boolean
         default: false
 
@@ -139,6 +140,9 @@ jobs:
           echo "WORKDIR=$RUNNER_TEMP/bs-work" >> "$GITHUB_ENV"
           WORKDIR="$RUNNER_TEMP/bs-work"
           pip install -e .
+          # agent:mini only: mini-swe-agent, pinned and without dependencies
+          # (ADR-0018). Before the freeze, so pip-freeze.txt records it.
+          if [ "$SOURCE" = "agent:mini" ]; then bash scripts/install_mini.sh; fi
           mkdir -p "$WORKDIR"
           pip freeze > "$WORKDIR/pip-freeze.txt"
 
@@ -170,6 +174,7 @@ jobs:
             ${{ runner.temp }}/bs-work/harness.*.out
             ${{ runner.temp }}/bs-work/pip-freeze.txt
             ${{ runner.temp }}/bs-work/preds.*.jsonl
+            ${{ runner.temp }}/bs-work/crashes/
           retention-days: 90
 
   summary:
