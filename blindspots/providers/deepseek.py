@@ -60,10 +60,12 @@ class DeepSeek:
 
     # ------------------------------------------------------------------ call
 
-    def complete(self, messages: list[dict[str, str]], *, model: str,
+    def complete(self, messages: list[dict[str, Any]], *, model: str,
                  max_tokens: int, temperature: float, thinking: Thinking,
                  reasoning_effort: Effort | None = None,
-                 timeout_s: float | None = None) -> Completion:
+                 timeout_s: float | None = None,
+                 tools: list[dict[str, Any]] | None = None,
+                 tool_choice: str | None = None) -> Completion:
         """One call, no retries. Raises ProviderError on anything unexpected.
 
         timeout_s overrides the client timeout for this call; the accountant
@@ -73,7 +75,8 @@ class DeepSeek:
         """
         body = build_request(messages, model=model, max_tokens=max_tokens,
                              temperature=temperature, thinking=thinking,
-                             reasoning_effort=reasoning_effort)
+                             reasoning_effort=reasoning_effort,
+                             tools=tools, tool_choice=tool_choice)
         started = datetime.now(timezone.utc)
         t0 = time.monotonic()
         try:
@@ -99,9 +102,18 @@ class DeepSeek:
 # ---------------------------------------------------------------- pure helpers
 # Kept outside the class so tests can call them with no network at all.
 
-def build_request(messages: list[dict[str, str]], *, model: str, max_tokens: int,
+def build_request(messages: list[dict[str, Any]], *, model: str, max_tokens: int,
                   temperature: float, thinking: Thinking,
-                  reasoning_effort: Effort | None = None) -> dict[str, Any]:
+                  reasoning_effort: Effort | None = None,
+                  tools: list[dict[str, Any]] | None = None,
+                  tool_choice: str | None = None) -> dict[str, Any]:
+    """The request body. Without tools it is exactly the Week 2 body, key for
+    key, so agent:simple's requests (and its cached prefix) are unchanged.
+
+    tools (ADR-0018): function tools only [PRIMARY — API reference]. When
+    tools are sent, tool_choice must be given too (ADR-0013: no server
+    defaults). parallel_tool_calls is never sent: DeepSeek does not document it.
+    """
     if model not in MODELS:
         raise ProviderError(f"unknown model {model!r}; expected one of {MODELS}")
     if not 1 <= max_tokens <= MAX_OUTPUT_TOKENS:
@@ -114,11 +126,16 @@ def build_request(messages: list[dict[str, str]], *, model: str, max_tokens: int
         raise ProviderError("reasoning_effort only applies when thinking is enabled")
     if not messages:
         raise ProviderError("no messages")
+    if (tools is None) != (tool_choice is None):
+        raise ProviderError("tools and tool_choice must be given together")
+    if tool_choice is not None and tool_choice not in ("auto", "none"):
+        # "required" and named choices fail in thinking mode [PRIMARY — API reference].
+        raise ProviderError(f"tool_choice must be 'auto' or 'none', got {tool_choice!r}")
 
     thinking_obj: dict[str, Any] = {"type": thinking}
     if reasoning_effort is not None:
         thinking_obj["reasoning_effort"] = reasoning_effort
-    return {
+    body = {
         "model": model,
         "messages": messages,
         "max_tokens": max_tokens,
@@ -126,6 +143,10 @@ def build_request(messages: list[dict[str, str]], *, model: str, max_tokens: int
         "thinking": thinking_obj,
         "stream": False,
     }
+    if tools is not None:
+        body["tools"] = tools
+        body["tool_choice"] = tool_choice
+    return body
 
 
 def _cache_fields(usage: dict[str, Any]) -> tuple[int, int]:

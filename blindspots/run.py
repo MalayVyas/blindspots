@@ -2,9 +2,10 @@
 
     python -m blindspots.run --run-id dev-gold-2 --source gold
 
-Sources: gold, empty, noop (controls, $0) and agent:simple (Week 2 step 4:
+Sources: gold, empty, noop (controls, $0), agent:simple (Week 2 step 4:
 the simple agent writes the patch, spending real money under the ADR-0014
-limits). See ADR-0011.
+limits) and agent:mini (Week 4: stock mini-swe-agent, our transport,
+ADR-0018). See ADR-0011.
 
     python -m blindspots.run --run-id dev-agent-1 --source agent:simple --instances django__django-13343
 """
@@ -40,8 +41,8 @@ NOOP_PATCH = (
     "@@ -0,0 +1 @@\n"
     "+Negative control: this patch changes no code.\n"
 )
-SOURCES = ("gold", "empty", "noop", "agent:simple")
-AGENT_SOURCES = ("agent:simple",)
+SOURCES = ("gold", "empty", "noop", "agent:simple", "agent:mini")
+AGENT_SOURCES = ("agent:simple", "agent:mini")
 
 
 class RunnerError(RuntimeError):
@@ -219,10 +220,26 @@ def check_against_summary(records: list[RunRecord], summary: dict) -> None:
 
 # ---------------------------------------------------------------- agent
 
-def run_agent(ids: list[str], workdir: Path, cache_bust: bool = False) -> dict:
-    """Prepare every workspace first, so a Docker or commit problem stops the
-    run before any money is spent; then one agent job per task."""
+def agent_config_for(source: str, cache_bust: bool = False) -> dict:
+    """The agent's part of the config (and so of the config hash)."""
+    if source == "agent:mini":
+        from blindspots.agent import mini
+        return mini.agent_config()
     from blindspots.accountant import Limits
+    from blindspots.agent.attempt import agent_config
+    return agent_config(Limits(), cache_bust=cache_bust)
+
+
+def run_agent(ids: list[str], workdir: Path, cache_bust: bool = False,
+              source: str = "agent:simple", run_id: str = "run") -> dict:
+    """Prepare every workspace first, so a Docker or commit problem stops the
+    run before any money is spent; then one agent job per task.
+
+    For agent:mini the workspace copy is not read by the agent (mini works in
+    its own container), but preparing it is still the $0 check that the
+    image is local and its code is the task's."""
+    from blindspots.accountant import Limits
+    from blindspots.agent import mini
     from blindspots.agent.attempt import attempt_all
     from blindspots.agent.workspace import WorkspaceError, load_tasks, prepare
     from blindspots.providers.base import ProviderError
@@ -230,11 +247,13 @@ def run_agent(ids: list[str], workdir: Path, cache_bust: bool = False) -> dict:
 
     repos = Path(workdir) / "repos"
     try:
+        if source == "agent:mini":
+            mini.check_pins()  # refuses here, at $0, if mini is not exactly as pinned
         tasks = load_tasks(ids)
         for t in tasks:
             prepare(t, repos)
         provider = DeepSeek()  # refuses here, at $0, if the key is missing
-    except (WorkspaceError, ProviderError) as e:
+    except (WorkspaceError, ProviderError, mini.MiniSetupError) as e:
         raise RunnerError(str(e)) from e
 
     def report(a):
@@ -243,6 +262,14 @@ def run_agent(ids: list[str], workdir: Path, cache_bust: bool = False) -> dict:
               f"{a.usage.input_tokens:,} in / {a.usage.output_tokens:,} out")
 
     with provider:
+        if source == "agent:mini":
+            out = {}
+            for t in tasks:
+                a = mini.attempt(t, provider,
+                                 crash_dir=Path(workdir) / "crashes" / run_id)
+                report(a)
+                out[t.instance_id] = a
+            return out
         return attempt_all(tasks, provider, Limits(), repos, report, cache_bust=cache_bust)
 
 
@@ -262,8 +289,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="agent sources only: a random marker at the start of every "
                          "prompt, so no call can hit the cache (Week 3)")
     args = ap.parse_args(argv)
-    if args.cache_bust and args.source not in AGENT_SOURCES:
-        raise RunnerError("--cache-bust only applies to agent sources")
+    if args.cache_bust and args.source != "agent:simple":
+        raise RunnerError("--cache-bust only applies to agent:simple")
 
     os.environ["HF_DATASETS_OFFLINE"] = "1"  # before anything imports datasets
     workdir = args.workdir.expanduser().resolve()
@@ -283,11 +310,10 @@ def main(argv: list[str] | None = None) -> int:
 
     attempts = None
     if args.source in AGENT_SOURCES:
-        attempts = run_agent(ids, workdir, cache_bust=args.cache_bust)
+        attempts = run_agent(ids, workdir, cache_bust=args.cache_bust, source=args.source,
+                             run_id=args.run_id)
         patches = {i: attempts[i].patch for i in ids}
-        from blindspots.agent.attempt import agent_config
-        from blindspots.accountant import Limits
-        config.update(agent_config(Limits(), cache_bust=args.cache_bust))
+        config.update(agent_config_for(args.source, cache_bust=args.cache_bust))
     else:
         patches = patches_for(args.source, ids)
 

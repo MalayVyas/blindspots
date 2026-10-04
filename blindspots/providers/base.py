@@ -75,3 +75,20 @@ class Completion(BaseModel):
     @property
     def truncated(self) -> bool:
         return self.finish_reason == "length"
+
+
+def reply_message(response: dict[str, Any]) -> dict[str, Any]:
+    """The assistant message an agent sends back as history, built from the
+    raw response (ADR-0018).
+
+    One definition, used both by agents that re-send their history and by the
+    accountant that checks they re-sent it unchanged; two copies could drift
+    and make that check fail, or pass, for the wrong reason. Keys are fixed:
+    role, content (None when the reply is only tool calls, as the API returns
+    it) and tool_calls only when there are any.
+    """
+    message = response["choices"][0]["message"]
+    out: dict[str, Any] = {"role": "assistant", "content": message.get("content")}
+    if message.get("tool_calls"):
+        out["tool_calls"] = message["tool_calls"]
+    return out
