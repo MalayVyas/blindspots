@@ -762,6 +762,14 @@ Move to a lock file at the first unexplained difference between local
 and CI results. Move to a self-hosted runner only if task images
 outgrow the free runner's disk.
 
+### Amendment — permanent home for records (2026-10-04)
+
+The open item under Consequences is decided in **ADR-0017**: every run
+is archived as `RUN_ID.tar.gz` in the `run-records` release, and the
+run-ID check also refuses IDs found there. Run IDs are now letters,
+digits and hyphens only. Decision 5 (artifacts, 90 days) is unchanged;
+artifacts stay as a convenience copy.
+
 ---
 
 ## ADR-0013: Provider adapters over raw HTTP; two costs per call
@@ -1029,6 +1037,87 @@ two days earlier (results entry #9).
 DeepSeek documents a way to disable caching; or any busted attempt
 reports a cache hit (then put the marker inside every message, or
 move to the documented switch).
+
+---
+
+## ADR-0017: Permanent home for CI run records — GitHub Release assets
+
+**Date:** 2026-10-04 · **Status:** accepted
+
+### Context
+
+CI records live only as workflow artifacts, which expire after at most
+90 days on a public repository [PRIMARY — GitHub Actions docs]
+(ADR-0012 left this open). Two things are lost at expiry: the records
+themselves, the evidence for every CI figure in results.md; and the
+check that refuses a reused run ID, which looks up artifacts and so
+silently stops protecting IDs older than 90 days. The mini-swe-agent
+baseline (Week 4 item 3) must not start before this is fixed.
+
+### Decision
+
+1. **One long-lived release, tag `run-records`, one asset per run:
+   `RUN_ID.tar.gz`.** It holds the run's artifacts exactly as uploaded,
+   one folder per task (record, harness logs, console output,
+   predictions, `pip freeze`).
+2. **`scripts/archive_ci_run.sh GITHUB_RUN RUN_ID` builds and uploads
+   it**, for new runs and old ones alike. It downloads the run's
+   artifacts, refuses names that are not exactly `RUN_ID-TASK` for a
+   dev-split task, re-validates every record, packs, creates the release
+   if missing, uploads, and checks the asset kept its exact name.
+3. **The benchmark's summary job runs that script** after its own
+   re-validation succeeds. It is the only job with `contents: write`;
+   the workflow default stays `contents: read`.
+4. **Never overwritten.** No `--clobber`; GitHub refuses a second asset
+   with the same name [PRIMARY — REST docs, release assets], so a repeat
+   fails the job (ADR-0011).
+5. **The run-ID check also refuses an ID whose `RUN_ID.tar.gz` exists**,
+   besides the existing artifact check. Run IDs are restricted to
+   letters, digits and hyphens, because GitHub renames asset files with
+   special characters [PRIMARY — REST docs, release assets], and a
+   renamed archive would escape an exact-name check.
+6. The 90-day artifacts stay as they are, for convenience.
+
+### Options considered
+
+| Choice | Rejected alternatives and what they lack |
+| --- | --- |
+| Release assets | **Commit records to the repo:** this folder holds source and documents only; transcripts make every run a permanent addition to git history. **Hugging Face dataset:** built for data and permanent, but a second service and a write token in CI for a few MB a month; kept as the fallback. **Artifacts only:** expire after 90 days, taking the evidence and the run-ID protection with them |
+| Tarball per run | One asset per record: up to five uploads per run and five times the assets against the per-release cap |
+| Archive after re-validation | Archive everything: a record that fails validation would be kept for good as if it were evidence |
+| Same script for CI and backfill | Archive logic in YAML: two builders that can drift, so old and new archives would differ |
+
+### Consequences
+
+- Records outlive the 90 days, and so does protection of run IDs.
+- Limits: each file under 2 GiB; up to 1,000 assets per release; no
+  limit on total release size or bandwidth [PRIMARY — GitHub docs,
+  "About releases"]. One 5-task agent run packs to 256 KB [MEASURED,
+  ci-w3-cache-1, dry run], so the per-file limit is far away; the
+  asset cap means 1,000 runs.
+- Retention: the docs state no expiry for release assets; that they are
+  kept until deleted is [UNVERIFIED].
+- **Not tamper-proof.** Anyone with write access can delete an asset or
+  the release, which would also free its run ID. Accepted for a
+  one-maintainer repository [JUDGEMENT].
+- A run whose records fail re-validation is not archived; its ID is
+  protected only by artifacts, for 90 days. That run is broken anyway
+  and is investigated, not cited.
+- The summary job downloads its own run's artifacts with `gh run
+  download` while the run is still in progress [UNVERIFIED — confirmed
+  or refuted by the first archived run].
+- Backfill is manual: every earlier CI run must be archived with the
+  script before its artifacts expire, 90 days after upload. The first
+  (`ci-gold-1`, 2026-09-29) expires around 2026-12-28 [ESTIMATE].
+  Before the run-ID check existed (commit d39fc79, 2026-09-30),
+  `ci-gold-1` was used by three runs; only run 36506913529, the one
+  results entry #4 cites, can be archived under that name.
+
+### Reversal condition
+
+Move to a Hugging Face dataset if a run's archive nears 2 GiB, the
+release nears 1,000 assets, or GitHub documents an expiry for release
+assets.
 
 ---
 
