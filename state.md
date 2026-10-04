@@ -243,7 +243,7 @@ benchmark has been run yet.
      agent container has network), tripwire `diagnostics.outside_reach`
      on every mini record, cold/warm revised (cold if call 1's cached
      tokens <= shared prefix: mini 128, simple 0).
-     Model spend to date about $0.080.
+     Model spend to date about $0.084 (incl. `dev-mini-net-smoke-1`, $0.004).
      **DeepSeek's cache appears shared across API keys on one account:**
      ci-mini-1's django-13343 call 1 had 1,408/1,551 tokens cached in CI
      (repository secret) after the local smoke run (local key)
