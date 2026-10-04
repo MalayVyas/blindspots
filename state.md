@@ -218,8 +218,9 @@ benchmark has been run yet.
      are measured the same way as our agent's. The ADR states "stock
      mini, our transport". Same $0.10 per-job cap; higher call limit
      for this agent only (~75). Patches scored by our runner. 5 dev
-     tasks x 3 repeats on separate days (ADR-0008). About $0.15-0.35
-     total [ESTIMATE]. Expect mini to win (it can search the repo, and
+     tasks x 3 repeats on separate days (ADR-0008). About $0.25-0.60
+     total, hard bound $1.50 (15 x $0.10 at peak) [ESTIMATE, ADR-0018].
+     Expect mini to win (it can search the repo, and
      localisation decides every outcome so far); do not improve our
      agent in response.
   4. **README with real numbers**, after the baseline; columns change

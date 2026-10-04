@@ -890,6 +890,32 @@ Replace the byte estimate with an exact tokenizer if good calls are
 regularly refused. Revisit the limit values when the multi-agent
 pipeline arrives in December, using the costs measured in Week 3.
 
+### Amendment — prefix-aware estimate (2026-10-04)
+
+The reversal condition above is met in advance for agents that re-send
+a growing history (ADR-0018). Modelled on mini-swe-agent, the byte
+estimate prices the whole re-sent history as new, at about 4x its
+token count, and refuses calls when real spend is about a third of
+the $0.10 cap [ESTIMATE]. The cap would then measure the estimate,
+not the spending.
+
+**Change.** When a call's messages begin with exactly the previous
+call's messages, that prefix is estimated by the previous call's
+reported input tokens; only the messages after it are counted in
+bytes. Otherwise the whole prompt is counted in bytes, as before.
+Every estimated token is still priced as a cache miss at peak.
+
+**Byte count.** It now also counts tool-call arguments, tool-call IDs
+and the tool schema, and treats missing content as empty. For
+content-only messages without tools the count is unchanged.
+
+**Unchanged.** The after-call check, the limits and the pricing. A
+one-call agent's only call has no previous call, so agent:simple's
+checks are exactly as before. The prefix count is exact; the new
+messages keep the byte estimate's slack, which also covers the few
+formatting tokens per message that bytes leave out. A tokenizer is
+still not adopted.
+
 ---
 
 ## ADR-0015: The simple agent (Week 2)
@@ -1118,6 +1144,137 @@ baseline (Week 4 item 3) must not start before this is fixed.
 Move to a Hugging Face dataset if a run's archive nears 2 GiB, the
 release nears 1,000 assets, or GitHub documents an expiry for release
 assets.
+
+---
+
+## ADR-0018: mini-swe-agent baseline — stock mini, our transport
+
+**Date:** 2026-10-04 · **Status:** accepted
+
+### Context
+
+The simple agent makes one call with keyword-chosen files, and
+localisation decided every outcome so far (results entries #8–#9). It
+needs a reference: a published, minimal agent that searches the
+repository itself. mini-swe-agent's agent loop and SWE-bench config are
+short and public. Its stock model layer (litellm) would price and
+cache-count calls by its own rules, and retry failed calls, so its
+numbers would not be comparable with ours (ADR-0009, ADR-0013,
+ADR-0016).
+
+### Options considered
+
+| Choice | Rejected alternatives and what they lack |
+| --- | --- |
+| Stock mini 2.4.6 config, prompts and loop; our model class | Stock litellm transport: costs from litellm's price table, no cache cross-check, retries. Tuning mini's prompts: no longer a baseline |
+| Our driver builds mini's `DefaultAgent` and `DockerEnvironment` | mini's batch runner with `--model-class`: a thread pool, a live display, its own predictions file and dataset loading between us and the record |
+| Prefix-aware pre-call estimate (ADR-0014 amendment) | Byte estimate as it was: refuses at about a third of the cap for a growing history [ESTIMATE]. A tokenizer: a dependency not confirmed to match DeepSeek |
+| Transcript of new messages per call | Full request per call, as agent:simple stores: size grows with the square of the number of calls, about 10–15 MB per 75-call attempt [ESTIMATE] |
+| Limits per agent, in the config hash | One limit set for all: 5 calls stops mini at step 5; 75 calls is meaningless for a one-call agent |
+
+### Decision
+
+1. **`mini-swe-agent==2.4.6`, pinned.** The stock
+   `config/benchmarks/swebench.yaml` is loaded unmodified. The record's
+   prompt hashes are the file's hash, each of its four templates' hashes
+   and the bash tool schema's hash.
+2. **Stock mini, our transport.** A model class sends every call
+   through the token accountant and DeepSeek adapter. It uses mini's
+   own tool definition, action parser and observation formatter, so
+   only the HTTP call is ours. Settings as agent:simple:
+   `deepseek-flash`, thinking off, temperature 0, `max_tokens` 4,096.
+   `tool_choice: auto` is sent explicitly; `parallel_tool_calls`, which
+   stock mini sends, is not, because DeepSeek does not document it
+   [PRIMARY — API reference]. No retries.
+3. **Mini runs commands in its own container** from the task's image,
+   the same one the harness uses. Starting it is preparation, outside
+   `agent_s`. It is always stopped in a `finally`, including when the
+   attempt crashes.
+4. **Our limits for agent:mini:** 75 calls, 5,000,000 input tokens,
+   40,000 output tokens, 1,200 s, $0.10 [ESTIMATE — sizing in the
+   Week 4 checkpoint 1 notes, summarised under Consequences]. Mini's
+   own limits (250 steps, $3, no time limit, 3 consecutive format
+   errors) stay stock. They are always looser than ours, and both sets
+   are recorded in the config.
+5. **Transcript: each call stores its new messages and its reply**, not
+   the full request. Before every call the accountant checks that the
+   request equals the previous request, then the previous reply exactly
+   or not at all, then new messages. Mini leaves the reply out only
+   after a reply with no tool call (its `FormatError` path [PRIMARY —
+   mini 2.4.6 `agents/default.py`]). Any other mismatch raises before
+   the call is sent and fails the attempt loudly. Each full request
+   can be rebuilt from the transcript. agent:simple keeps full requests.
+6. **Endings map to existing outcomes.** A submitted patch is scored by
+   the harness. An empty submission, or three replies in a row with no
+   tool call, is `empty_patch`. A `LimitBreached` inside a step is
+   `spend_ceiling` or `wall_clock_limit`, and a `ProviderError` is
+   `provider_error`. Mini's own limits cannot fire first; if one ever
+   does, the result is `empty_patch` with its exit status in
+   diagnostics.
+7. **Records:** schema 3, `patch_source: agent:mini`, `agent_s`, the
+   transcript above, and diagnostics: mini's exit status, call count
+   and cost, and the files patched against the gold patch's files.
+
+### Consequences
+
+- Stock mini and this baseline differ only in transport. The stock
+  config's `model` section holds litellm's transport settings, and our
+  model class drops exactly those keys: `model_name`
+  (`anthropic/claude-sonnet-4-5-20250929`) and `model_kwargs`
+  (`drop_params: true`, `parallel_tool_calls: true`). Its two templates
+  are used unchanged. Beyond that: no retries, and our costs and limits.
+- A `TranscriptMismatch` writes a crash dump (calls, tokens, cost, the
+  delta transcript so far, the error) to
+  `WORKDIR/crashes/RUN_ID/INSTANCE.crash.json`, outside the records
+  folder so it is never read as a record, then aborts the run. No
+  record is written for that attempt.
+- Sizing [ESTIMATE]: a first prompt of 1.3–1.9K tokens [MEASURED from
+  the stock templates and the five dev issues], growing by about
+  0.8–1.6K tokens per step. 75 calls re-send up to about 4.6M input
+  tokens, mostly cached, and write 19–30K output tokens. The $0.10 cap
+  refuses at about 56–94 calls, when real spend is about $0.07.
+- Transcripts grow linearly with the number of calls instead of with
+  its square; the rebuild check guarantees nothing is lost by not
+  storing full requests.
+- Spend: about $0.25–0.60 for 15 attempts [ESTIMATE]; hard bound
+  $1.50 (15 × $0.10 at peak prices).
+- A transient API error ends the attempt as `provider_error` where
+  stock mini would retry.
+- Expected result: mini beats agent:simple. agent:simple is not changed
+  in response (ADR-0008).
+
+### Reversal condition
+
+If more than one attempt in five ends on a limit or as
+`provider_error`, revisit the limits and the transport before running
+repeats 2–3, never between the repeats of a task.
+
+### Note — installed without dependencies (2026-10-04)
+
+A normal install of `mini-swe-agent==2.4.6` would have downgraded
+`filelock` from 4.0.3 to 3.32.7, a package the harness depends on
+(through `datasets` and `huggingface_hub`). The cause is litellm, which
+mini requires: `litellm==1.104.0` caps `filelock<4.0` [PRIMARY —
+resolver output]. agent:mini never imports litellm.
+
+So mini is installed with `--no-deps`, from `requirements-mini.txt`:
+`mini-swe-agent==2.4.6`, `jinja2==3.1.6` and `markupsafe==3.0.4`
+(Jinja2's own required dependency), exact versions, hash-checked. The
+one install command is `scripts/install_mini.sh`, used by CI and
+locally. `blindspots/agent/mini.py` refuses to run unless those exact
+versions are installed.
+
+**Proof** (clean throwaway venv: the project's versions of the five
+packages mini's modules import, plus the three above): every module the
+driver uses imports, and mini's stock `DefaultAgent`, built from the
+stock config with a fake model, runs to `Submitted` through mini's own
+submission check. litellm, openai and textual were neither imported
+nor installed [MEASURED]. A unit test keeps asserting they are not
+imported. In the project venv the install adds exactly those three
+packages and changes nothing else [MEASURED — dry run].
+
+**Reversal condition.** A future mini that needs a package we do not
+install fails at import, never silently. Revisit then.
 
 ---
 
