@@ -234,8 +234,25 @@ benchmark has been run yet.
      goes into results entry #10 with the CI runs. Limits stay as in
      ADR-0018: no retuning from one attempt.
      Model spend to date about $0.053.
-     **Next:** push the branch, then dispatch `ci-mini-1/2/3`, one per
-     day (benchmark.yml; commands in the Phase 4 notes).
+     **`ci-mini-1` (5/5 resolved, $0.027) is VOID (2026-10-04):** in 2/5
+     attempts (sphinx-8621, sphinx-9658) mini downloaded newer Sphinx
+     releases or cloned upstream and read the fix before editing. Images
+     clean (no refs beyond HEAD, fix blobs absent). Kept in `run-records`,
+     reported in results entry #10 as a finding. Fix: mini's container
+     runs with `--network none` (ADR-0018 amendment; project rule: no
+     agent container has network), tripwire `diagnostics.outside_reach`
+     on every mini record, cold/warm revised (cold if call 1's cached
+     tokens <= shared prefix: mini 128, simple 0).
+     Model spend to date about $0.080.
+     **DeepSeek's cache appears shared across API keys on one account:**
+     ci-mini-1's django-13343 call 1 had 1,408/1,551 tokens cached in CI
+     (repository secret) after the local smoke run (local key)
+     [MEASURED, n=1; that the two keys differ is stated by Malay, not
+     checked from the records]. Repeats on later days can be warm
+     whichever key ran first.
+     **Next:** local smoke `dev-mini-net-smoke-1`; then Malay pushes,
+     merges, tags `mini-baseline-2` (never moved) and dispatches
+     `ci-mini-net-1/2/3` on three days.
   4. **README with real numbers**, after the baseline; columns change
      from "/50" to "/5 dev tasks".
   5. **Month review:** about 15-30 h from 26 Sep to 2 Oct [stated].

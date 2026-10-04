@@ -54,6 +54,18 @@ TOOL_CHOICE = "auto"
 LIMITS = Limits(max_calls=75, max_input_tokens=5_000_000, max_output_tokens=40_000,
                 max_wall_clock_s=1200.0, max_cost_usd=0.10)
 
+# No network in the agent's container (ADR-0018 amendment, 2026-10-04).
+# mini's own default is ["--rm"]; this keeps it and adds no network. In
+# ci-mini-1, 2 of 5 attempts downloaded newer releases or cloned upstream
+# and read the fix. Passed through mini's own DockerEnvironment setting.
+RUN_ARGS = ["--rm", "--network", "none"]
+
+# Commands that try to reach outside the task (the tripwire diagnostic).
+OUTSIDE = re.compile(
+    r"\b(?:pip3?|python3?\s+-m\s+pip|uv\s+pip)\s+(?:install|download)\b"
+    r"|\bgit\s+(?:-\S+\s+)*(?:clone|fetch|pull)\b"
+    r"|\bcurl\b|\bwget\b|\b(?:https?|ftp)://|\bgit@[\w.-]+:")
+
 
 class MiniSetupError(RuntimeError):
     """mini is missing, or not exactly the pinned version: refuse at $0."""
@@ -154,7 +166,8 @@ def agent_config(limits: Limits = LIMITS) -> dict[str, Any]:
     return {"agent": "mini", "mini_version": MINI_VERSION, "model": MODEL,
             "settings": {**SETTINGS, "tool_choice": TOOL_CHOICE},
             "limits": limits.model_dump(), "mini_limits": mini_limits(),
-            "environment": {k: env[k] for k in ("cwd", "timeout", "interpreter")}}
+            "environment": {**{k: env[k] for k in ("cwd", "timeout", "interpreter")},
+                            "run_args": RUN_ARGS}}
 
 
 # ---------------------------------------------------------------- model
@@ -232,7 +245,7 @@ def make_env(task: Task):
 
     env_cfg = {k: v for k, v in stock_config()["environment"].items()
                if k != "environment_class"}
-    return MiniEnv(image=task.image, **env_cfg)
+    return MiniEnv(image=task.image, run_args=RUN_ARGS, **env_cfg)
 
 
 # ---------------------------------------------------------------- one attempt
@@ -255,6 +268,29 @@ def solve(task: Task, env, acct: Accountant) -> MiniResult:
     return MiniResult(patch=info.get("submission") or "",
                       exit_status=info.get("exit_status") or "",
                       mini_calls=agent.n_calls, mini_cost_usd=agent.cost)
+
+
+def outside_reach(transcript: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Tripwire: every command that tried to reach outside the task, with its
+    exit status (from mini's <returncode> in the next observation; None if the
+    attempt ended before the output came back). Refused and timed-out entries
+    are scanned too: when a limit ends the attempt, the last outputs are there."""
+    commands, codes = [], {}
+    for n, entry in enumerate(transcript, 1):
+        body = entry.get("refused") or entry.get("timed_out") or entry
+        for m in body.get("new_messages", []):
+            if m.get("role") == "tool":
+                rc = re.search(r"<returncode>(-?\d+)</returncode>", m.get("content") or "")
+                codes[m.get("tool_call_id")] = int(rc.group(1)) if rc else None
+        if "response" in entry:
+            for tc in entry["response"]["choices"][0]["message"].get("tool_calls") or []:
+                try:
+                    cmd = json.loads(tc["function"]["arguments"]).get("command", "")
+                except (ValueError, KeyError, TypeError, AttributeError):
+                    continue
+                commands.append((n, tc.get("id"), cmd))
+    return [{"call": n, "command": cmd, "returncode": codes.get(tid)}
+            for n, tid, cmd in commands if OUTSIDE.search(cmd)]
 
 
 def _files(patch: str) -> list[str]:
@@ -288,11 +324,13 @@ def attempt(task: Task, provider, limits: Limits = LIMITS,
         t0 = time.monotonic()
         acct = Accountant(provider, limits, model=MODEL, transcript="delta")
 
-        def done(agent_s: float, **kw) -> Attempt:
+        def done(agent_s: float, diagnostics: dict | None = None, **kw) -> Attempt:
+            transcript = acct.transcript()
+            diag = {**(diagnostics or {}), "outside_reach": outside_reach(transcript)}
             return Attempt(instance_id=task.instance_id, usage=acct.usage(),
-                           transcript=acct.transcript(), prompt_hashes=hashes,
+                           transcript=transcript, prompt_hashes=hashes,
                            started_at=started, finished_at=datetime.now(timezone.utc),
-                           agent_s=agent_s, **kw)
+                           agent_s=agent_s, diagnostics=diag, **kw)
 
         try:
             res = solve(task, env, acct)

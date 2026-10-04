@@ -341,3 +341,76 @@ def test_transcript_mismatch_writes_a_crash_dump_then_aborts(tmp_path, monkeypat
     from blindspots.summarise import load
     (tmp_path / "records").mkdir()
     assert load(tmp_path / "records") == []
+
+
+# ---------------------------------------------------------------- no network, tripwire
+
+def test_container_runs_without_network(monkeypatch):
+    # The real docker command mini builds, with subprocess intercepted.
+    import minisweagent.environments.docker as docker_env
+    seen = []
+
+    def fake_run(cmd, **kw):
+        seen.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, stdout="abc123\n", stderr="")
+
+    monkeypatch.setattr(docker_env.subprocess, "run", fake_run)
+    env = mini.make_env(task())
+    [cmd] = seen
+    assert cmd[:2] == ["docker", "run"]
+    i = cmd.index("--network")
+    assert cmd[i + 1] == "none" and "--rm" in cmd
+    assert env.config.run_args == mini.RUN_ARGS == ["--rm", "--network", "none"]
+    assert mini.agent_config()["environment"]["run_args"] == mini.RUN_ARGS
+
+
+def call_entry(commands, ids, outputs=()):
+    """A delta-transcript call: the reply's tool calls, and the outputs
+    (tool messages) of the previous call's commands as new messages."""
+    return {"response": {"choices": [{"message": {"tool_calls": [tool(c, i) for c, i in zip(commands, ids)]}}]},
+            "new_messages": [{"role": "tool", "tool_call_id": tid,
+                              "content": f"<returncode>{rc}</returncode>\n<output>\nx\n</output>"}
+                             for tid, rc in outputs]}
+
+
+def test_tripwire_flags_outside_commands_with_their_exit_status():
+    transcript = [
+        call_entry(["git log --oneline -3", "pip download sphinx==4.0.0 -d /tmp/x"], ["a", "b"]),
+        call_entry(["cd /tmp && git clone https://github.com/sphinx-doc/sphinx.git"], ["c"],
+                   outputs=[("a", 0), ("b", 1)]),
+        call_entry(["curl -s https://example.org"], ["d"], outputs=[("c", 128)]),
+        {"refused": {"limit": "calls", "new_messages": [
+            {"role": "tool", "tool_call_id": "d", "content": "<returncode>6</returncode>"}]}},
+    ]
+    assert mini.outside_reach(transcript) == [
+        {"call": 1, "command": "pip download sphinx==4.0.0 -d /tmp/x", "returncode": 1},
+        {"call": 2, "command": "cd /tmp && git clone https://github.com/sphinx-doc/sphinx.git",
+         "returncode": 128},
+        {"call": 3, "command": "curl -s https://example.org", "returncode": 6},   # from the refused entry
+    ]
+
+
+def test_every_mini_record_carries_the_tripwire():
+    m = mini._mini()
+    base_factory, stopped = fake_env_factory()
+
+    def factory(t):
+        env = base_factory(t)
+        real = env.execute
+
+        def execute(action, cwd="", *, timeout=None):   # as with --network none
+            if "pip download" in action["command"]:
+                return {"output": "ERROR: Could not find a version (network unreachable)\n",
+                        "returncode": 1, "exception_info": ""}
+            return real(action, cwd, timeout=timeout)
+        env.execute = execute
+        return env
+
+    provider = ScriptedProvider([["pip download sphinx==4.0.0 --no-deps -d /tmp/x"], ["submit"]])
+    a = mini.attempt(task(), provider, env_factory=factory)
+    assert a.diagnostics["outside_reach"] == [
+        {"call": 1, "command": "pip download sphinx==4.0.0 --no-deps -d /tmp/x", "returncode": 1}]
+    # Also on endings that never reach the diagnostics block.
+    b = mini.attempt(task(), ScriptedProvider([["ls"], ProviderError("HTTP 500")]),
+                     env_factory=fake_env_factory()[0])
+    assert b.outcome is Outcome.PROVIDER_ERROR and b.diagnostics["outside_reach"] == []

@@ -1251,6 +1251,8 @@ repeats 2–3, never between the repeats of a task.
 
 ### Note — cold and warm, pre-registered before the CI runs (2026-10-04)
 
+*Superseded the same day, before any valid run, by the amendment below (cold if call 1's cached tokens are at most the shared prefix).*
+
 ADR-0016 classes attempts by measured cache hits, and Week 3's report
 called an attempt cold when under 10% of all its input was cached. That
 rule cannot be used for a multi-call agent: each step re-sends the
@@ -1265,6 +1267,50 @@ later is reported separately, as the within-attempt share. The first
 call is mini's stock first prompt, identical for every repeat of a task,
 so a repeat on a later day can be warm (results entry #9: the cache
 lasted at least about 43 hours).
+
+### Amendment — no network; cold/warm revised (2026-10-04)
+
+**ci-mini-1 is void.** In 2 of its 5 attempts mini reached the upstream
+fix over the network before making its own edit [MEASURED — transcripts,
+`run-records/ci-mini-1.tar.gz`]. sphinx-8621 ran `pip download` of Sphinx
+4.0.0 and 3.5.0, cloned the upstream repository and ran `git show` on the
+fix commit. sphinx-9658 ran `pip download` of Sphinx 4.3.0 and diffed its
+`mock.py` against the task's. The task images were clean: no refs beyond
+HEAD, no unreachable commits, and the post-fix files absent from each
+object database. The run stays archived and is reported in results entry
+#10 as a finding.
+
+**Third difference from stock mini: no network.** Mini's container runs
+with `--network none`, passed through mini's own `DockerEnvironment`
+`run_args` (`["--rm", "--network", "none"]`, keeping mini's default
+`--rm`). Prompts and loop are unchanged. The run arguments are recorded in
+the config, so they are part of the config hash. Rationale: the evidence
+above, and like-for-like with agent:simple, which has no tools and so no
+network. The harness's own container is not affected.
+
+**Project rule: every agent container in Blindspots runs without
+network**, including December's pipeline. An agent sees only the task.
+
+**Tripwire.** Every agent:mini record lists, in
+`diagnostics.outside_reach`, each command that tried to reach outside
+(`pip`/`python -m pip`/`uv pip` install or download, `git clone`/`fetch`/
+`pull`, `curl`, `wget`, any URL), with its exit status. With no network
+these should all fail; a success is a finding.
+
+**Cold and warm, revised before the new runs (supersedes the note
+above).** Call 1 always shares a prefix with every other task of the
+same agent, so a fully cold attempt can still report a few cached
+tokens. An attempt is **cold if call 1's cached tokens are at most the
+agent's shared prefix, warm otherwise**:
+- agent:mini, **128 tokens**: system message, tool schema and the
+  instance template's opening before the issue text (397 bytes). Call 1
+  of all 4 ci-mini-1 attempts whose task had never run before reported
+  exactly 128 cached tokens [MEASURED].
+- agent:simple, **0 tokens**: its shared prefix is the 269-byte system
+  prompt, and every task's first-ever attempt reported 0 cached tokens
+  [MEASURED, 4 of 4, results entry #8].
+The same rule is applied to agent:simple in results entry #10. The
+cache-hit share of calls 2 and later is reported separately for mini.
 
 ### Note — installed without dependencies (2026-10-04)
 
