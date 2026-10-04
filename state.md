@@ -1,6 +1,6 @@
 # Blindspots — current state
 
-**Last updated 2026-10-04 (Week 4 item 1 done: record schema 3).** Read this first in a new session. It says
+**Last updated 2026-10-04 (Week 4 items 1-2 done: schema 3, permanent records).** Read this first in a new session. It says
 where the project stands, what is decided, what is still open, and
 which older material is stale.
 
@@ -194,11 +194,24 @@ benchmark has been run yet.
      Gold run `dev-gold-s3-1` on django__django-13343: resolved,
      schema 3, `agent_s` null. No agent record has a real `agent_s`
      yet; the baseline's will be the first.
-  2. **Permanent home for CI records: GitHub Release assets.** One
-     `run-records` release, one tarball per run ID, uploaded by the
-     summary job. Needs an ADR. Reverse if assets hit a size limit →
-     Hugging Face. Must exist before the baseline runs (20 records =
-     2.4 MB [MEASURED]; mini's transcripts will be longer).
+  2. ~~Permanent home for CI records~~ **done (2026-10-04),** PR #1,
+     merge 638c3f3. GitHub Release `run-records`, one `RUN_ID.tar.gz`
+     per run, never overwritten (ADR-0017, ADR-0012 amendment). The
+     workflow's summary job and the backfill both use
+     `scripts/archive_ci_run.sh`, so every archive has the same layout:
+     one folder per task (merging would collapse same-named files).
+     The run-ID check now also refuses IDs that have an asset.
+     Acceptance (gold, $0): `ci-gold-archive-1` archived by the
+     workflow and re-validated (resolved, schema 3); a second dispatch
+     was refused by the artifact check; after deleting that artifact,
+     a third was refused by the asset check alone (run 37174951184) —
+     so old IDs stay protected after artifacts expire. Seven earlier
+     CI runs backfilled: 8 assets. Round trip: `ci-w3-cache-1`
+     downloaded from the release validates under schema-3 code; costs
+     and outcomes match results entry #9.
+     To summarise an archive, point `summarise` at the records only:
+     the harness logs inside contain other `.json` files (report.json).
+     `gh release` outside the repo folder needs `-R MalayVyas/blindspots`.
   3. **mini-swe-agent baseline.** Version 2.4.6, stock config, prompts
      and loop; a small model class routes its calls through our
      DeepSeek adapter and token accountant, so cache fields and cost
