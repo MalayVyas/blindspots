@@ -14,6 +14,7 @@ Nothing is retried (ADR-0009).
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -39,6 +40,7 @@ class Attempt:
     prompt_hashes: dict[str, str]
     started_at: datetime
     finished_at: datetime
+    agent_s: float                   # the agent's own wall-clock, preparation excluded
     breach: Breach | None = None
     error: str | None = None
     diagnostics: dict[str, Any] = field(default_factory=dict)
@@ -64,20 +66,27 @@ def attempt(task: Task, provider, limits: Limits, repos_root: Path,
             cache_bust: bool = False) -> Attempt:
     started = datetime.now(timezone.utc)
     repo = prepare(task, repos_root)
+    # The agent's clock starts after preparation and stops when solve() ends,
+    # however it ends; the diagnostics computed afterwards are ours, not its.
+    t0 = time.monotonic()
     acct = Accountant(provider, limits, model=MODEL)
     hashes = simple.prompt_hashes(simple.load_prompts())
 
-    def done(**kw) -> Attempt:
+    def done(agent_s: float, **kw) -> Attempt:
         return Attempt(instance_id=task.instance_id, usage=acct.usage(),
                        transcript=acct.transcript(), prompt_hashes=hashes,
-                       started_at=started, finished_at=datetime.now(timezone.utc), **kw)
+                       started_at=started, finished_at=datetime.now(timezone.utc),
+                       agent_s=agent_s, **kw)
 
     try:
         res = simple.solve(task, repo, acct, cache_bust=cache_bust)
     except LimitBreached as e:
-        return done(patch="", outcome=outcome_for(e.breach), breach=e.breach, error=str(e))
+        return done(time.monotonic() - t0, patch="", outcome=outcome_for(e.breach),
+                    breach=e.breach, error=str(e))
     except ProviderError as e:
-        return done(patch="", outcome=Outcome.PROVIDER_ERROR, error=str(e))
+        return done(time.monotonic() - t0, patch="", outcome=Outcome.PROVIDER_ERROR,
+                    error=str(e))
+    agent_s = time.monotonic() - t0
 
     diag = {"agent_status": res.status, "selection": res.selection,
             "image_environment_changes": environment_changes(task, repo), **res.diagnostics}
@@ -87,10 +96,12 @@ def attempt(task: Task, provider, limits: Limits, repos_root: Path,
         # the "busted" figures, and the marker design needs another look.
         diag["cache_bust_verified"] = acct.usage().cached_input_tokens == 0
     if res.status == "patch":
-        return done(patch=res.patch, outcome=None, diagnostics=diag)
+        return done(agent_s, patch=res.patch, outcome=None, diagnostics=diag)
     if res.status == "no_edits":
-        return done(patch="", outcome=Outcome.EMPTY_PATCH, error=res.error, diagnostics=diag)
-    return done(patch="", outcome=Outcome.PATCH_APPLY_FAILED, error=res.error, diagnostics=diag)
+        return done(agent_s, patch="", outcome=Outcome.EMPTY_PATCH, error=res.error,
+                    diagnostics=diag)
+    return done(agent_s, patch="", outcome=Outcome.PATCH_APPLY_FAILED, error=res.error,
+                diagnostics=diag)
 
 
 def attempt_all(tasks: list[Task], provider, limits: Limits, repos_root: Path,

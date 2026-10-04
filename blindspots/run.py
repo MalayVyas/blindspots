@@ -153,6 +153,14 @@ def capture_environment(docker: str | None) -> Environment:
 
 # ---------------------------------------------------------------- records
 
+def _with_agent(timing: Timing, attempt) -> Timing:
+    """The harness's timing plus the agent's own wall-clock (schema 3).
+    Unchanged for sources without an attempt (gold, empty, noop)."""
+    if attempt is None:
+        return timing
+    return timing.model_copy(update={"agent_s": attempt.agent_s})
+
+
 def build_records(run_id: str, source: str, patches: dict[str, str],
                   workdir: Path, env: Environment, config: dict,
                   run_start: datetime, run_end: datetime,
@@ -176,17 +184,18 @@ def build_records(run_id: str, source: str, patches: dict[str, str],
                 # The harness never saw this task.
                 records.append(RunRecord(**common, outcome=a.outcome, tests=None,
                                          timing=Timing(started_at=a.started_at,
-                                                       finished_at=a.finished_at),
+                                                       finished_at=a.finished_at,
+                                                       agent_s=a.agent_s),
                                          breach=a.breach, error=a.error))
                 continue
         if not patch.strip():
             # The harness never evaluates empty patches (results.md entry #2).
             records.append(RunRecord(**common, outcome=Outcome.EMPTY_PATCH,
-                                     tests=None, timing=whole_run))
+                                     tests=None, timing=_with_agent(whole_run, a)))
             continue
         report = harness.find_task_file(logs, run_id, iid, "report.json")
         log = harness.find_task_file(logs, run_id, iid, "run_instance.log")
-        timing = harness.parse_timing(log) if log else whole_run
+        timing = _with_agent(harness.parse_timing(log) if log else whole_run, a)
         if report is None:
             records.append(RunRecord(
                 **common, outcome=Outcome.HARNESS_ERROR, tests=None, timing=timing,

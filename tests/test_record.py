@@ -75,3 +75,28 @@ def test_unresolved_needs_tests():
 def test_empty_patch_record():
     rec = make(outcome=Outcome.EMPTY_PATCH, patch="", tests=None)
     assert rec.tests is None
+
+
+# ---------------------------------------------------------------- schema 3: agent_s
+
+def test_schema3_agent_record_needs_agent_s():
+    with pytest.raises(ValidationError, match="needs timing.agent_s"):
+        make(patch_source="agent:simple")
+
+
+def test_schema3_agent_s_cannot_be_negative():
+    with pytest.raises(ValidationError, match="needs timing.agent_s"):
+        make(patch_source="agent:simple",
+             timing=Timing(started_at=NOW, finished_at=NOW, agent_s=-0.1))
+
+
+def test_schema3_gold_record_with_agent_s_is_rejected():
+    with pytest.raises(ValidationError, match="must be None"):
+        make(timing=Timing(started_at=NOW, finished_at=NOW, agent_s=1.0))
+
+
+def test_schema3_agent_record_round_trip(tmp_path):
+    rec = make(patch_source="agent:simple",
+               timing=Timing(started_at=NOW, finished_at=NOW, agent_s=2.5))
+    assert rec.schema_version == 3
+    assert read_record(write_record(rec, tmp_path)) == rec

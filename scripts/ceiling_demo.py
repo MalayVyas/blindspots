@@ -62,7 +62,7 @@ def main() -> int:
         run_id=run_id, instance_id="ceiling-demo", patch_source="agent:ceiling-demo",
         model=MODEL, config=config, config_hash=config_hash(config), patch="",
         outcome=outcome_for(breach), tests=None, usage=acct.usage(),
-        timing=Timing(started_at=started, finished_at=finished),
+        timing=Timing(started_at=started, finished_at=finished, agent_s=acct.elapsed_s),
         transcript=acct.transcript(), breach=breach,
         environment=capture_environment(docker_version()))
     path = write_record(rec, RECORDS)

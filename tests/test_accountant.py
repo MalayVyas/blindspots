@@ -201,7 +201,7 @@ def record_for(a, breach, outcome):
     return RunRecord(run_id="t", instance_id="ceiling-test", patch_source="agent:test",
                      model=MODEL, config=config, config_hash=config_hash(config),
                      patch="", outcome=outcome, tests=None, usage=a.usage(),
-                     timing=Timing(started_at=now, finished_at=now),
+                     timing=Timing(started_at=now, finished_at=now, agent_s=a.elapsed_s),
                      transcript=a.transcript(), breach=breach, environment=ENV)
 
 
@@ -226,6 +226,14 @@ def test_record_refuses_breach_outcome_mismatch():
 def test_schema_v1_records_still_load():
     rec = read_record(Path(__file__).parent / "fixtures" / "record_v1.json")
     assert rec.schema_version == 1 and rec.breach is None
+
+
+def test_schema_v2_agent_records_still_load_without_agent_s():
+    # A real record (Week 2 ceiling demo), copied unchanged. agent_s became
+    # required for agent records in schema 3 only; older ones are never edited.
+    rec = read_record(Path(__file__).parent / "fixtures" / "record_v2_agent.json")
+    assert rec.schema_version == 2 and rec.patch_source.startswith("agent:")
+    assert rec.timing.agent_s is None and rec.outcome is Outcome.SPEND_CEILING
 
 
 def test_limits_change_the_config_hash():

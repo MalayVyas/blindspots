@@ -3,6 +3,7 @@
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -41,6 +42,7 @@ def test_every_ending_is_captured(no_prepare, tmp_path, provider, limits, outcom
     assert a.outcome == outcome
     assert a.diagnostics.get("agent_status") == status
     assert a.prompt_hashes and a.finished_at >= a.started_at
+    assert a.agent_s >= 0                            # every ending is timed, failures too
     if outcome is Outcome.SPEND_CEILING:
         assert a.breach.limit == "input_tokens" and a.usage.model_calls == 0
         assert "refused" in a.transcript[-1]
@@ -67,7 +69,21 @@ def test_decided_outcomes_become_records_without_the_harness(no_prepare, tmp_pat
     assert recs[0].usage.model_calls == 1 and recs[0].transcript
     assert recs[1].error.startswith("HTTP 402")
     for r in recs:                                   # survives a write and a re-read
+        assert r.timing.agent_s == atts[r.instance_id].agent_s
         assert read_record(write_record(r, tmp_path / "records")) == r
+
+
+def test_limit_breach_attempt_is_timed(no_prepare, tmp_path, monkeypatch):
+    # Replace the name `time` inside attempt.py only, not the time module itself:
+    # the agent's clock reads 100.0 at the start and 107.5 when solve() raises.
+    ticks = iter([100.0, 107.5])
+    monkeypatch.setattr(att, "time", SimpleNamespace(monotonic=lambda: next(ticks)))
+    a = att.attempt(task(no_prepare), FakeModel(GOOD_REPLY), Limits(max_input_tokens=10),
+                    tmp_path)
+    assert a.outcome is Outcome.SPEND_CEILING and a.agent_s == 7.5
+    [rec] = build_records("r", "agent:simple", {"a": ""}, tmp_path / "none", ENV,
+                          config(), T0, T0, {"a": a})
+    assert rec.timing.agent_s == 7.5 and rec.breach.limit == "input_tokens"
 
 
 def test_scored_patch_keeps_usage_and_diagnostics(no_prepare, tmp_path):
@@ -80,6 +96,8 @@ def test_scored_patch_keeps_usage_and_diagnostics(no_prepare, tmp_path):
     [rec] = build_records("r", "agent:simple", {TASK: a.patch}, tmp_path, ENV,
                           config(), T0, T0, {TASK: a})
     assert rec.outcome is Outcome.UNRESOLVED          # verdict from the harness fixture
+    assert rec.timing.evaluation_s is not None        # the harness's timing is kept...
+    assert rec.timing.agent_s == a.agent_s            # ...and the agent's is added
     assert rec.usage.model_calls == 1 and rec.prompt_hashes == a.prompt_hashes
     assert rec.diagnostics["localisation"]["all_gold_files_shown"]
     assert rec.model == "deepseek-flash"

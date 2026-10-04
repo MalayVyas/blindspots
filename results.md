@@ -67,6 +67,12 @@ wall-clock, the patch, the full transcript, and the outcome. Entries
 in this file are summaries over those records; the records are the
 evidence.
 
+From schema 3 (Week 4), wall-clock is two figures: the harness's
+own timing (`timing.started_at`/`finished_at` and the evaluation
+breakdown) and, for agent records, `timing.agent_s` — the agent's
+attempt alone, workspace preparation excluded. Failed attempts
+carry it too: their time counts, like their cost.
+
 This starts with run number one. Beyond making cost per fix
 computable, every failed patch becomes labelled data for the reviewer
 benchmark in January — gold patches are the positive class, failures
@@ -682,3 +688,4 @@ before the attempts and is not timed. Gap: scored records keep only the
 harness's timing, so agent time is read from the transcript's
 `latency_s`. An `agent_s` field needs record schema 3 (ADR-0011) — Week 4.
 [MEASURED]
+Gap closed by schema 3 (ADR-0011 amendment, 2026-10-04).

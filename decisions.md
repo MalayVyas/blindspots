@@ -682,6 +682,19 @@ environment, or a patch that did not apply.
 Change the format only by incrementing `schema_version` and keeping a
 reader for older versions. Never edit existing records.
 
+### Amendment — schema 3 (2026-10-04)
+
+`Timing.agent_s`: wall-clock seconds of the agent's attempt for one
+task — every model call plus the agent's own processing — measured
+with `time.monotonic`, excluding workspace preparation. Required
+(not null, ≥ 0) when `patch_source` starts with `agent:`, including
+attempts that end in `spend_ceiling`, `wall_clock_limit`,
+`provider_error` or `empty_patch`; null for gold, empty and no-op.
+Reason: scored records kept only the harness's timing, so agent time
+could only be rebuilt from transcript `latency_s` (results entry #9
+addendum). Checked for schema 3 only; schema 1 and 2 records load
+unchanged and are never edited.
+
 ---
 
 ## ADR-0012: CI benchmark design

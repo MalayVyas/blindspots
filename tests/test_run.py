@@ -44,6 +44,7 @@ def test_gold_run_becomes_a_resolved_record(tmp_path):
     [rec] = build_records("r1", "gold", {TASK: "diff --git a/x b/x\n"}, wd, ENV,
                           {"patch_source": "gold"}, T0, T0)
     assert rec.outcome is Outcome.RESOLVED
+    assert rec.timing.agent_s is None          # no agent ran (schema 3)
 
 
 def test_empty_patch_needs_no_harness_output(tmp_path):

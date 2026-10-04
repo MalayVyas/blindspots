@@ -1,6 +1,6 @@
 # Blindspots — current state
 
-**Last updated 2026-10-02 (Week 3 complete; Week 4 designed).** Read this first in a new session. It says
+**Last updated 2026-10-04 (Week 4 item 1 done: record schema 3).** Read this first in a new session. It says
 where the project stands, what is decided, what is still open, and
 which older material is stale.
 
@@ -186,9 +186,14 @@ benchmark has been run yet.
   Commit `scripts/week3_report.py` and these doc updates from WSL.
 
 - **Week 4 design (approved by Malay 2026-10-02) — start here.** Order:
-  1. **Record schema 3 with `agent_s`.** $0; good cloud-session task
-     (credit expires 5 Nov). First, so the baseline's records are born
-     in schema 3.
+  1. ~~Record schema 3 with `agent_s`~~ **done (2026-10-04).**
+     `Timing.agent_s`: the agent's own wall-clock (`time.monotonic`,
+     workspace preparation excluded), required on `agent:` records and
+     null on gold/empty/noop; enforced for schema 3 only (ADR-0011
+     amendment, results.md "Run records"). 141 unit tests pass, $0.
+     Gold run `dev-gold-s3-1` on django__django-13343: resolved,
+     schema 3, `agent_s` null. No agent record has a real `agent_s`
+     yet; the baseline's will be the first.
   2. **Permanent home for CI records: GitHub Release assets.** One
      `run-records` release, one tarball per run ID, uploaded by the
      summary job. Needs an ADR. Reverse if assets hit a size limit →

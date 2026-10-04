@@ -16,7 +16,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 # Version history (ADR-0011: never edit old records, keep a reader for them):
 #   1  Week 1. Usage held input/output/cached tokens and one cost_usd.
 #   2  Week 2. Usage adds cache-miss and reasoning tokens and three costs
@@ -27,6 +27,9 @@ SCHEMA_VERSION = 2
 #      Amended 2026-09-30: outcome tests_errored, split out of
 #      patch_apply_failed (results entry #8). Records written earlier keep
 #      their label; records are never edited (ADR-0011).
+#   3  Week 4. Timing.agent_s: the agent's own wall-clock, required on
+#      agent records and absent on gold/empty/noop. Checked for version 3
+#      only, so version 1 and 2 records load unchanged.
 #   A version-1 file still loads: every new field has a default.
 
 
@@ -67,6 +70,9 @@ class Timing(_Strict):
     test_runtime_s: the harness's own "Test runtime" figure, inside evaluation_s.
     teardown_s: "attempting to stop container" to the last line, inside
         evaluation_s. The harness waits up to 15 s for the stop.
+    agent_s: schema 3, agent records only. The agent's attempt for this
+        task (every model call plus its own processing), by time.monotonic,
+        excluding workspace preparation. None for gold/empty/noop.
     """
 
     started_at: datetime
@@ -75,6 +81,7 @@ class Timing(_Strict):
     evaluation_s: float | None = None
     test_runtime_s: float | None = None
     teardown_s: float | None = None
+    agent_s: float | None = None  # schema 3
 
 
 class Usage(_Strict):
@@ -131,7 +138,7 @@ def config_hash(config: dict[str, Any]) -> str:
 
 
 class RunRecord(_Strict):
-    schema_version: Literal[1, 2] = SCHEMA_VERSION
+    schema_version: Literal[1, 2, 3] = SCHEMA_VERSION
     run_id: str
     instance_id: str
     patch_source: str  # "gold", "empty", "noop", or "agent:NAME" from Week 2
@@ -185,6 +192,14 @@ class RunRecord(_Strict):
                 raise ValueError("usage: cached + cache-miss input != input tokens")
             if u.reasoning_tokens > u.output_tokens:
                 raise ValueError("usage: reasoning tokens exceed output tokens")
+
+        if self.schema_version >= 3:
+            agent_s = self.timing.agent_s
+            if self.patch_source.startswith("agent:"):
+                if agent_s is None or agent_s < 0:
+                    raise ValueError(f"agent record needs timing.agent_s >= 0, got {agent_s}")
+            elif agent_s is not None:
+                raise ValueError(f"timing.agent_s must be None for source {self.patch_source}")
         return self
 
 
