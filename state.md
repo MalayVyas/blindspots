@@ -1,6 +1,6 @@
 # Blindspots — current state
 
-**Last updated 2026-10-04 (Week 4 items 1-2 done: schema 3, permanent records).** Read this first in a new session. It says
+**Last updated 2026-10-07 (Week 4 item 3: net-3 deviation, net-4 pre-registered).** Read this first in a new session. It says
 where the project stands, what is decided, what is still open, and
 which older material is stale.
 
@@ -250,9 +250,61 @@ benchmark has been run yet.
      [MEASURED, n=1; that the two keys differ is stated by Malay, not
      checked from the records]. Repeats on later days can be warm
      whichever key ran first.
-     **Next:** local smoke `dev-mini-net-smoke-1`; then Malay pushes,
-     merges, tags `mini-baseline-2` (never moved) and dispatches
-     `ci-mini-net-1/2/3` on three days.
+     `ci-mini-net-1/2/3` ran on tag `mini-baseline-2` (commit 985273b).
+     **Deviation:** net-1 ran on 2026-10-04 UTC, but net-2 (00:16 UTC)
+     and net-3 (00:25 UTC) both ran on 2026-10-07 UTC. ADR-0008 asks for
+     repeats on separate days.
+     **Pre-registration (2026-10-07, written before `ci-mini-net-4` is
+     dispatched; binding):**
+     - `ci-mini-net-4` is dispatched on tag `mini-baseline-2`, on a UTC
+       day other than 2026-10-04 and 2026-10-07 (from 2026-10-08 00:00
+       UTC).
+     - net-4 replaces net-3 in every headline figure of results entry
+       #10, whatever its result. Headline runs: net-1, net-2, net-4.
+     - net-3 stays in entry #10 as a reported deviation, with its
+       numbers, and goes into no figure. It has been seen: 4/5 resolved
+       (sphinx-8621 unresolved), $0.04253 reference cost, sphinx-9658 used
+       71 of 75 calls.
+     - The two-day figure line (net-1 + net-2) is kept alongside the
+       headline.
+     - results.md is not written until net-4 is in. Every figure comes
+       from `scripts/entry10_report.py` reading the run-records archives,
+       with exactly these arguments:
+       `--mini ci-mini-net-1 ci-mini-net-2 ci-mini-net-4 --two-day
+       ci-mini-net-1 ci-mini-net-2 --deviation ci-mini-net-3 --void
+       ci-mini-1 --simple ci-w3-cache-1 ci-w3-cache-2 ci-w3-cache-3
+       ci-w3-bust-1 --localisation ci-agent-1 ci-agent-2 ci-w3-cache-1
+       ci-w3-cache-2 ci-w3-cache-3 ci-w3-bust-1`. Bootstrap seed 10,
+       10,000 draws, resampling tasks.
+     - Comparator: agent:simple is results entry #9's 20 attempts
+       (`ci-w3-cache-1/2/3` + `ci-w3-bust-1`, commit 630bc4c, 4 per
+       task), the `--simple` arguments above. The localisation figure
+       (keyword selection missed the gold file: 0/16 resolved) uses all
+       26 CI attempts of agent:simple (`--localisation`, adding
+       `ci-agent-1/2`) and is labelled a diagnostic, not a comparison.
+     - Incomplete net-4: `provider_error`, limit hits
+       (`spend_ceiling`, `wall_clock_limit`) and `harness_error` are
+       failures as defined in results.md, counted and never rerun.
+       ADR-0018's reversal condition still applies (more than one
+       attempt in five on a limit or `provider_error`: revisit the
+       limits and the transport, never between the repeats of a task).
+       net-4 counts in the headline either way; a trigger informs later
+       work (December), not this entry. Infrastructure failure only (a
+       task with no record, the job never ran, the runner died): one
+       replacement run,
+       `ci-mini-net-5`, on another UTC day, replacing net-4 entirely
+       (all 5 tasks; net-4's partial records are reported, in no
+       figure). If net-5 is also incomplete, the headline is the
+       two-day figure (net-1 + net-2), labelled as such.
+     **Follow-up before December (tripwire):** classify each
+     `outside_reach` entry from its output (for example "name
+     resolution" in the output = blocked), not from `returncode`.
+     Document that `returncode` is the exit status of the pipeline's
+     last command: `pip download ... 2>&1 | tail -3` reports 0 although
+     pip failed. No change to mini's shell (no `pipefail`); stock mini
+     stays stock.
+     **Next:** Malay dispatches `ci-mini-net-4` on or after 2026-10-08
+     UTC; then results entry #10.
   4. **README with real numbers**, after the baseline; columns change
      from "/50" to "/5 dev tasks".
   5. **Month review:** about 15-30 h from 26 Sep to 2 Oct [stated].
