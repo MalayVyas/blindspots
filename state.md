@@ -1,6 +1,6 @@
 # Blindspots — current state
 
-**Last updated 2026-10-07 (Week 4 item 3: net-3 deviation, net-4 pre-registered).** Read this first in a new session. It says
+**Last updated 2026-10-09 (Week 4 item 3 done: results entry #10).** Read this first in a new session. It says
 where the project stands, what is decided, what is still open, and
 which older material is stale.
 
@@ -212,7 +212,10 @@ benchmark has been run yet.
      To summarise an archive, point `summarise` at the records only:
      the harness logs inside contain other `.json` files (report.json).
      `gh release` outside the repo folder needs `-R MalayVyas/blindspots`.
-  3. **mini-swe-agent baseline.** Version 2.4.6, stock config, prompts
+  3. ~~mini-swe-agent baseline~~ **done (2026-10-09), results entry #10:**
+     agent:mini 14/15 resolved against agent:simple 1/20 (Wilson
+     intervals separate; per-fix cost intervals overlap). Model spend to
+     date about $0.272. Version 2.4.6, stock config, prompts
      and loop; a small model class routes its calls through our
      DeepSeek adapter and token accountant, so cache fields and cost
      are measured the same way as our agent's. The ADR states "stock
@@ -296,6 +299,49 @@ benchmark has been run yet.
        (all 5 tasks; net-4's partial records are reported, in no
        figure). If net-5 is also incomplete, the headline is the
        two-day figure (net-1 + net-2), labelled as such.
+     **net-4 is in (2026-10-08, 02:04–02:10 UTC):** 5/5 resolved, no
+     limit hit or `provider_error`, so the pre-registered headline
+     stands (net-1, net-2, net-4). It ran in DeepSeek's peak window:
+     billed $0.07745, exactly 2x its reference $0.03872.
+     **Edits to entry #10, decided 2026-10-09 after net-4 was seen.**
+     Wording and tagging only: no figure, run or report argument
+     changes, and each edit makes a claim narrower, not stronger.
+     1. The finding "searching the repository is what wins" becomes the
+        measured statement "agent:mini resolved every task at least
+        once; agent:simple never resolved a task whose gold file
+        keyword selection missed (0/16, diagnostic)". The causal reading
+        is tagged [JUDGEMENT], noting the agents also differ in prompts,
+        loop and call count.
+     2. The sphinx-9658 finding stays; Limits adds "sphinx-9658 used 71
+        of 75 calls twice; the call limit may bind on December's harder
+        tasks and longer pipeline".
+     3. Tripwire follow-up: already below; no change.
+     4. Answer leads with resolve rate (14/15 against 1/20, Wilson
+        intervals separate), then "per fix the 95% intervals overlap
+        ($0.0028-0.0134 against $0.0091-unbounded)", and only then the
+        point estimates. "About 3.7x less per fix" is not a headline
+        claim.
+     5. A recall finding, framed as input to January's contamination
+        check: `_storage_callable` (13343) was grepped for before it
+        existed anywhere in the repository, as agent:simple named it in
+        entry #7; on sphinx-8621 the recalled pattern was wrong.
+        `getattr(other, 'conditional', False)` (14017) is **not**
+        evidence: it is already in `expressions.py` and appeared in an
+        output before the model wrote it. The 14017 evidence is the
+        model citing "ticket #32448" and commit hashes as the upstream
+        fix (not checked against Django's history).
+     6. Cache hits are compared on warm attempts only (mini 97.3%,
+        simple 99.2%); simple's 74.4% includes 5 busted attempts with
+        caching deliberately defeated.
+     7. Limits: "Not an ADR-0008 comparison: the agents differ in
+        prompts and loop, not only model binding. A baseline."
+     8. Setup: "`--records` was the only argument added; it gives the
+        archive location and changes no analysis."
+     9. net-3 tripwire: "output suppressed; `ls /tmp/` listed nothing".
+     10. Interpretations stay, tagged: all-warm is [MEASURED] by the
+        ADR-0018 rule, its implication [JUDGEMENT]; the call-limit
+        reading [JUDGEMENT]; 56-94 calls is ADR-0018's [ESTIMATE].
+     Model spend to date about $0.272 (net-1 to net-4 billed $0.18776).
      **Follow-up before December (tripwire):** classify each
      `outside_reach` entry from its output (for example "name
      resolution" in the output = blocked), not from `returncode`.
@@ -303,8 +349,8 @@ benchmark has been run yet.
      last command: `pip download ... 2>&1 | tail -3` reports 0 although
      pip failed. No change to mini's shell (no `pipefail`); stock mini
      stays stock.
-     **Next:** Malay dispatches `ci-mini-net-4` on or after 2026-10-08
-     UTC; then results entry #10.
+     Results entry #10 written 2026-10-09 with the edits above.
+     **Next:** item 4, README with real numbers.
   4. **README with real numbers**, after the baseline; columns change
      from "/50" to "/5 dev tasks".
   5. **Month review:** about 15-30 h from 26 Sep to 2 Oct [stated].

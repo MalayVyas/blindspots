@@ -689,3 +689,161 @@ harness's timing, so agent time is read from the transcript's
 `latency_s`. An `agent_s` field needs record schema 3 (ADR-0011) — Week 4.
 [MEASURED]
 Gap closed by schema 3 (ADR-0011 amendment, 2026-10-04).
+
+---
+
+## Entry #10 — agent:mini against agent:simple on the dev split (Week 4)
+
+**Date:** 2026-10-09 (headline runs 2026-10-04, 2026-10-07 and
+2026-10-08 UTC)
+**Question:** Does a minimal agent that searches the repository itself
+(mini-swe-agent, stock prompts and loop, our transport) beat the
+one-call agent:simple, and at what cost?
+**Answer:** On resolve rate, yes: agent:mini resolved **14/15**
+attempts (93%, Wilson 95% 70–99%) against agent:simple's **1/20** (5%,
+1–24%); the intervals are separate. Per fix the 95% intervals overlap
+($0.0028–0.0134 against $0.0091–unbounded). Point estimates: $0.0076
+per fix against $0.028; $0.0071 per attempt against $0.0014.
+**Setup:** tag `mini-baseline-2` (commit 985273b), `mini-swe-agent`
+2.4.6 stock SWE-bench config, `deepseek-flash`, thinking off,
+temperature 0, `max_tokens` 4,096, ADR-0018 limits (75 calls, 5M input
+tokens, 40K output tokens, 1,200 s, $0.10 at peak price), agent
+container with `--network none`. Headline runs `ci-mini-net-1`
+(2026-10-04), `ci-mini-net-2` (2026-10-07) and `ci-mini-net-4`
+(2026-10-08), one attempt per task each, as pre-registered on
+2026-10-07 (state.md, commit d7a2e1b). Comparator: results entry #9's 20
+attempts of agent:simple (`ci-w3-cache-1/2/3` + `ci-w3-bust-1`, commit
+630bc4c). Every figure comes from `scripts/entry10_report.py` with the
+pre-registered arguments, reading the run-records archives (archive
+SHA-256 prefixes: net-1 `1d305a20`, net-2 `88041dc0`, net-4 `c4410e85`).
+`--records` was the only argument added; it gives the archive location
+and changes no analysis. Costs are reference cost (off-peak list price,
+ADR-0013); billed cost is shown where it differs. Cold/warm by the
+ADR-0018 amendment rule.
+
+| Agent | Attempts | Resolved | Wilson 95% | Cost / attempt (95%) | Cost / fix (95%) |
+| --- | --- | --- | --- | --- | --- |
+| agent:mini, headline (net-1, 2, 4) | 15 | **14 (93.3%)** | 70.2–98.8% | $0.00710 ($0.00282–0.01138) | $0.00761 ($0.00282–0.01336) |
+| agent:mini, two-day line (net-1, 2) | 10 | 9 (90.0%) | 59.6–98.2% | $0.00678 ($0.00285–0.01094) | $0.00753 ($0.00285–0.01561) |
+| agent:simple (entry #9) | 20 | 1 (5.0%) | 0.9–23.6% | $0.00140 ($0.00119–0.00167) | $0.02797 ($0.00907–unbounded) |
+
+Cost intervals: bootstrap, resampling tasks rather than attempts, seed
+10, 10,000 draws. [MEASURED]
+
+| Task | Outcomes (net-1; net-2; net-4) | Calls of 75 | Reference cost | `agent_s` |
+| --- | --- | --- | --- | --- |
+| django-13343 | resolved ×3 | 14, 15, 14 | $0.00198–0.00243 | 24.8–28.8 |
+| django-13809 | resolved ×3 | 18, 10, 19 | $0.00210–0.00307 | 17.4–59.9 |
+| django-14017 | resolved ×3 | 22, 24, 21 | $0.00375–0.00494 | 37.0–40.9 |
+| sphinx-8621 | unresolved; resolved; resolved | 32, 50, 34 | $0.00893–0.01683 | 137.7–201.2 |
+| sphinx-9658 | resolved ×3 | 35, 65, **71** | $0.00696–0.02099 | 69.4–318.2 |
+
+Totals, headline: reference $0.10649, billed $0.14522; 444 calls;
+6,171,391 of 6,343,589 input tokens from cache (97.3%); 0 of 15
+attempts cold. [MEASURED]
+
+### Findings
+- **agent:mini resolved every task at least once; agent:simple never
+  resolved a task whose gold file keyword selection missed (0/16,
+  diagnostic).** The 0/16 is over all 26 of agent:simple's CI attempts
+  (2/10 when the gold file was shown) and uses agent:simple's runs only.
+  agent:mini patched the gold file in 14 of 15 headline attempts.
+  [MEASURED] Reading this as "searching the repository is what wins" is
+  a causal claim this entry cannot make: the two agents also differ in
+  prompts, loop and call count (one call against 10–71) [JUDGEMENT].
+- **Resolved without touching the gold file:** sphinx-9658 in net-4
+  (and in the deviation run net-3) was resolved with a patch to a
+  different file than the gold patch's. The harness's tests decide;
+  the file match is a diagnostic. [MEASURED]
+- **Cost is driven by the number of calls.** Of mini's headline
+  reference cost ($0.10649), output tokens are 58.4% ($0.06215),
+  uncached input 24.3% ($0.02583, 172,198 tokens) and cached input
+  17.4% ($0.01851, 6,171,391 tokens) [MEASURED — token counts at the
+  off-peak price table]. The two Sphinx tasks are 74% of headline
+  reference cost (8621 and 9658: $0.07902 of $0.10649) [ESTIMATE —
+  arithmetic on the table].
+- **Cache hits, warm attempts only: mini 97.3%, simple 99.2%.** All 15
+  mini attempts were warm; simple's 15 warm attempts had 316,401 of
+  318,900 input tokens cached (entry #9). Simple's all-attempt figure,
+  74.4%, includes its 5 busted attempts, where caching was deliberately
+  defeated (ADR-0016), so it is not compared here. Mini's lower warm
+  share is the uncached tail each new step adds. [MEASURED]
+- **Every attempt was warm.** Call 1 of each headline attempt had more
+  cached tokens than the 128-token shared prefix (1,152–2,048) [MEASURED
+  — by the ADR-0018 amendment rule]. ci-mini-1 and the earlier repeats
+  had already sent the same first prompts, so no headline figure is a
+  cold-cache figure; cold attempts would cost more [JUDGEMENT].
+- **net-4 ran at peak price.** It ran on Thursday 2026-10-08,
+  02:04–02:10 UTC, inside DeepSeek's 01:00–04:00 UTC peak window; all
+  159 of its calls were billed at peak rates, exactly 2.00x reference on
+  every task (billed $0.07745 against reference $0.03872). net-1 (a
+  Sunday) and net-2 (00:16 UTC) had no peak calls. Headline figures use
+  reference cost, so this changes billed spend only. [MEASURED]
+- **sphinx-9658 came close to the call limit.** It used 35, 65 and 71
+  of 75 calls (71 also in net-3). In net-4: 71 calls, `agent_s` 318 s of
+  1,200 s, $0.04198 at peak price = 42% of the $0.10 cap [MEASURED].
+  The call limit, not the spend cap, is the limit that binds for mini on
+  this task [JUDGEMENT]; ADR-0018's sizing expected the cap to refuse at
+  about 56–94 calls [ESTIMATE — ADR-0018].
+- **ADR-0018 reversal condition not met.** No headline attempt ended on
+  a limit or as `provider_error`: 0/5 in each of net-1, net-2 and net-4
+  (0/5 in net-3 too). The limits stay as they are. [MEASURED]
+- **The model names upstream fixes from memory.** On django-13343 it
+  grepped for `_storage_callable`, the name the gold patch introduces,
+  at call 4–6 of every headline attempt (and in ci-mini-1 and net-3);
+  the name is not in the repository and appeared in no output until
+  after its own edit. agent:simple did the same in entry #7
+  (`self._storage_callable`, with no repository access at all). On
+  django-14017 it cited "ticket #32448" and commit hashes as "the actual
+  Django fix" (net-1, net-2, net-4) (not checked against Django's
+  history); `getattr(other, 'conditional',
+  False)` itself is already in the repository (`expressions.py`) and
+  was in an output (call 4) before the model wrote it, so it is not
+  evidence of recall. On sphinx-8621 the recall was wrong: in net-1 and
+  net-2 it "recalled" the upstream pattern as `(-|\+|\^|\s+)`, the
+  unfixed pattern, and wrote its own algorithm after "No internet".
+  [MEASURED — transcripts] That the dev tasks are partly answered from
+  training data is likely [JUDGEMENT]; this is input to January's
+  contamination check, not a correction to these figures.
+- **Network tripwire: 5 entries in 15 headline attempts, all blocked.**
+  Each was a `pip download` of a newer Sphinx release (sphinx-8621 in
+  net-1, net-2, net-4; sphinx-9658 in net-2, net-4). Every output shows
+  `Temporary failure in name resolution`. All 5 report `returncode` 0,
+  which is the exit status of the pipeline's last command (`| tail`),
+  not of pip. [MEASURED]
+- **Variation between repeats** is mostly in calls, not outcome:
+  sphinx-9658 ranged from 35 to 71 calls and $0.00696 to $0.02099 with
+  the same outcome. sphinx-8621 is the one task whose outcome varied.
+  [MEASURED]
+
+### Deviation: `ci-mini-net-3` (in no figure)
+net-2 (00:16 UTC) and net-3 (00:25 UTC) both ran on 2026-10-07, against
+ADR-0008's repeats on separate days. As pre-registered, net-4 replaced
+net-3 in every figure. net-3's numbers: 4/5 resolved (sphinx-8621
+unresolved after 46 calls), reference $0.04252, 169 calls, 97.7% cache
+hits, 0/5 cold, sphinx-9658 71 of 75 calls. One tripwire entry
+(django-14017, `pip download django==4.0`): output suppressed; `ls
+/tmp/` listed nothing. [MEASURED]
+
+### Void: `ci-mini-1` (finding only)
+5/5 resolved, reference $0.02719, but in 2 of 5 attempts (sphinx-8621,
+sphinx-9658) mini downloaded newer Sphinx releases or cloned upstream
+and read the fix before editing. The task images were clean. This is
+why every agent container now runs without network (ADR-0018
+amendment). [MEASURED]
+
+**Local smoke `dev-mini-smoke-1`** (django-13343, off-peak): resolved,
+12 calls, 58,254 in / 1,729 out, 89.4% cached, billed $0.00212,
+`agent_s` 23.6 s. Not in any figure (local, before `--network none`).
+[MEASURED, n=1]
+
+**Limits:** Not an ADR-0008 comparison: the agents differ in prompts
+and loop, not only model binding. A baseline. 5 dev tasks; 3 attempts
+per task for mini, 4 for simple; one model; all mini attempts warm;
+agent:simple ran a week earlier on a different commit. sphinx-9658 used
+71 of 75 calls twice; the call limit may bind on December's harder
+tasks and longer pipeline.
+
+**Running total of model spend:** about $0.272 (about $0.084 before
+these runs, plus billed $0.02702 net-1, $0.04076 net-2, $0.04253 net-3,
+$0.07745 net-4) [ESTIMATE — sum of billed figures on a rounded base].
