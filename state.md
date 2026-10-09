@@ -1,6 +1,6 @@
 # Blindspots — current state
 
-**Last updated 2026-10-09 (Week 4 item 3 done: results entry #10).** Read this first in a new session. It says
+**Last updated 2026-10-09 (Week 4 item 4 done: README Results from entry #10).** Read this first in a new session. It says
 where the project stands, what is decided, what is still open, and
 which older material is stale.
 
@@ -350,9 +350,22 @@ benchmark has been run yet.
      pip failed. No change to mini's shell (no `pipefail`); stock mini
      stays stock.
      Results entry #10 written 2026-10-09 with the edits above.
-     **Next:** item 4, README with real numbers.
-  4. **README with real numbers**, after the baseline; columns change
-     from "/50" to "/5 dev tasks".
+  4. ~~README with real numbers~~ **done (2026-10-09),** commit c590af4,
+     pushed. README Results: a 5-dev-task table, agent:simple 1/20 and
+     agent:mini 14/15, five-agent rows marked December. Wilson 95% is
+     the headline interval (1-24% / 70-99%); a task bootstrap column
+     (0-15% / 80-100%) and "tasks resolved at least once" (1/5, 5/5)
+     sit beside it. Cost per attempt (reference) in the table; cost per
+     fix only as a sentence with its overlapping intervals. One
+     sentence each on the network (ci-mini-1) and recall findings.
+     The task bootstrap was added after review: printed by
+     `scripts/entry10_report.py` with the same pre-registered
+     arguments, recorded as a dated addendum to entry #10. It came out
+     narrower than Wilson, so Wilson stays the headline: **a method
+     added after review may only make a claim more cautious.**
+     Roadmap: seven items ticked, each linked to its entry or ADR.
+     CLAUDE.md: `[MEASURED]` added to the tag list.
+     **Next:** item 5, month review.
   5. **Month review:** about 15-30 h from 26 Sep to 2 Oct [stated].
      Deliberate front-loading by Malay to build a buffer before the
      November exams; Weeks 0-3 finished about 2.5 weeks early.
