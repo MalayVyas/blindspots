@@ -847,3 +847,32 @@ tasks and longer pipeline.
 **Running total of model spend:** about $0.272 (about $0.084 before
 these runs, plus billed $0.02702 net-1, $0.04076 net-2, $0.04253 net-3,
 $0.07745 net-4) [ESTIMATE — sum of billed figures on a rounded base].
+
+**Addendum (2026-10-09): task-clustered resolve-rate interval.** Added
+after review of the README draft; the figures above are unchanged. The
+Wilson intervals treat every attempt as independent, but the attempts
+are 3 (mini) or 4 (simple) repeats of the same 5 tasks, and repeats of
+a task are correlated: the same task tends to resolve or fail every
+time. `scripts/entry10_report.py` now also prints a resolve-rate
+bootstrap that resamples tasks rather than attempts (seed 10, 10,000
+draws, the same method as the cost intervals), from the same
+pre-registered run arguments; no argument changed.
+
+| Agent | Resolved | Wilson 95% | Task bootstrap 95% | Tasks resolved at least once |
+| --- | --- | --- | --- | --- |
+| agent:mini, headline (net-1, 2, 4) | 14/15 (93.3%) | 70.2–98.8% | 80.0–100.0% | 5/5 |
+| agent:mini, two-day line (net-1, 2) | 9/10 (90.0%) | 59.6–98.2% | 70.0–100.0% | 5/5 |
+| agent:simple (entry #9) | 1/20 (5.0%) | 0.9–23.6% | 0.0–15.0% | 1/5 |
+
+[MEASURED] The two agents' task-bootstrap intervals do not touch
+(15.0% against 80.0%).
+
+With 5 tasks this interval is rough, and here it is *narrower* than
+Wilson, not wider. A percentile bootstrap over 5 tasks can take only a
+handful of values, cannot see variation the 5 tasks do not show, and
+collapses where they agree: for agent:simple only one task ever
+resolved, and for `ci-mini-1` (5/5) it is 100.0–100.0%. Neither
+interval should be read as more than "far apart at n=5"
+[JUDGEMENT]. Wilson stays the headline interval: the task bootstrap
+is narrower, and a method added after review may only make a claim
+more cautious.

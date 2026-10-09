@@ -46,8 +46,9 @@ and role allocation.
 ## Writing style for docs and commits
 
 - Tag factual claims by source: `[PRIMARY]` vendor or project docs,
-  `[SECONDARY]` third-party, `[ESTIMATE]` arithmetic on stated
-  assumptions, `[JUDGEMENT]` opinion. **Never let an estimate read as
+  `[SECONDARY]` third-party, `[MEASURED]` our own run records or
+  transcripts, `[ESTIMATE]` arithmetic on stated assumptions,
+  `[JUDGEMENT]` opinion. **Never let an estimate read as
   a measurement.**
 - Every significant technical choice gets an ADR in `decisions.md`:
   context, options considered, decision, consequences, reversal

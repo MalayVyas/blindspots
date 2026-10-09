@@ -29,8 +29,10 @@ swapping one run for another is a change of arguments, not of code.
 Cold/warm (ADR-0018 amendment): cold if call 1's cached tokens are at or
 below the shared prefix (mini 128, simple 0). Costs are reference_usd
 (off-peak list price, ADR-0013); billed totals are shown too.
-Intervals: resolve rate, Wilson 95%; cost, bootstrap 95% resampling tasks
-rather than attempts, fixed seed.
+Intervals: resolve rate, Wilson 95% and bootstrap 95% resampling tasks;
+cost, bootstrap 95% resampling tasks rather than attempts, fixed seed.
+The resolve-rate bootstrap was added after review (2026-10-09): repeats
+of a task are correlated, and Wilson treats attempts as independent.
 """
 
 from __future__ import annotations
@@ -114,6 +116,10 @@ def bootstrap(recs: list[RunRecord], stat) -> tuple[float, float]:
     return vals[int(0.025 * DRAWS)], vals[int(0.975 * DRAWS) - 1]
 
 
+def resolve_rate(recs):
+    return sum(map(resolved, recs)) / len(recs)
+
+
 def per_attempt(recs):
     return sum(r.usage.reference_usd for r in recs) / len(recs)
 
@@ -130,6 +136,7 @@ def usd(x: float) -> str:
 def summary(label: str, recs: list[RunRecord]) -> None:
     k, n = sum(map(resolved, recs)), len(recs)
     lo, hi = wilson(k, n)
+    r_lo, r_hi = bootstrap(recs, resolve_rate)
     a_lo, a_hi = bootstrap(recs, per_attempt)
     f_lo, f_hi = bootstrap(recs, per_fix)
     billed = sum(r.usage.cost_usd for r in recs)
@@ -139,6 +146,7 @@ def summary(label: str, recs: list[RunRecord]) -> None:
     cold = sum(temp(r) == "cold" for r in recs)
     print(f"{label}")
     print(f"  resolved        {k}/{n} = {k/n:.1%}  (Wilson 95% {lo:.1%}-{hi:.1%})")
+    print(f"  resolved, tasks bootstrap 95% {r_lo:.1%}-{r_hi:.1%}")
     print(f"  cost / attempt  {usd(per_attempt(recs))}  (bootstrap 95% {usd(a_lo)}-{usd(a_hi)})")
     print(f"  cost / fix      {usd(per_fix(recs))}  (bootstrap 95% {usd(f_lo)}-{usd(f_hi)})")
     print(f"  reference total ${ref:.5f}; billed ${billed:.5f}")

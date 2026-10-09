@@ -123,15 +123,43 @@ sample size that would be needed.
 
 ## Results
 
-*No runs yet.* [`results.md`](results.md) carries the definitions —
-what counts as resolved, how cost per fix is computed, what every
-entry must record — fixed before the first measurement.
+Five dev tasks, one model (`deepseek-flash`), two single-agent
+baselines. This is a baseline, **not the role comparison** — the two
+agents differ in prompts and loop, not only in model, so it is not an
+[ADR-0008](decisions.md#adr-0008-pre-registered-comparison-protocol) comparison. Full detail, per-task figures and
+limits are in [results entry #10](results.md#entry-10--agentmini-against-agentsimple-on-the-dev-split-week-4);
+every figure comes from [`scripts/entry10_report.py`](scripts/entry10_report.py)
+(tag `mini-baseline-2`, commit 985273b).
 
-| Setup | Resolved / 50 | Cost per fix | 95% CI |
-| --- | --- | --- | --- |
-| Minimal single-agent baseline | — | — | — |
-| Five agents, one model for every role | — | — | — |
-| Five agents, best model per role | — | — | — |
+| Setup | Resolved / attempts | Wilson 95% | Task bootstrap 95% | Tasks resolved at least once (of 5) | Cost per attempt, reference (95%) |
+| --- | --- | --- | --- | --- | --- |
+| agent:simple — one model call, files chosen by keyword matching | 1 / 20 (5%) | 1–24% | 0–15% | 1 / 5 | $0.0014 ($0.0012–0.0017) |
+| agent:mini — mini-swe-agent, stock prompts, no network | 14 / 15 (93%) | 70–99% | 80–100% | 5 / 5 | $0.0071 ($0.0028–0.0114) |
+| Five agents, one model for every role | December | | | | |
+| Five agents, best model per role | December | | | | |
+
+[MEASURED] Both resolve-rate intervals are rough at 5 tasks. Wilson
+treats every attempt as independent; the task bootstrap resamples tasks
+(seed 10, 10,000 draws), since repeats of a task are correlated, but it
+comes out narrower here because it cannot see variation the 5 tasks do
+not show. The two agents are far apart on either method. Cost intervals
+are the same task bootstrap. Reference cost is the off-peak list price
+([ADR-0013](decisions.md#adr-0013-provider-adapters-over-raw-http-two-costs-per-call)). Every agent:mini attempt ran with a warm prompt
+cache, so none of these is a cold-cache cost.
+
+Cost per fix is not a headline here: its 95% intervals overlap —
+$0.0028–0.0134 for agent:mini against $0.0091–unbounded for
+agent:simple, which resolved only once [MEASURED].
+
+**Network.** In the first agent:mini run (`ci-mini-1`, void), the stock
+agent downloaded newer releases or cloned upstream and read the real
+fix in 2 of 5 tasks, so every agent container now runs without network
+[MEASURED].
+
+**Recall.** Both agents sometimes name the upstream fix from memory —
+on one Django task, an attribute name that exists only in the gold patch
+— which is input to January's contamination check, not a correction to
+these figures [MEASURED — transcripts; JUDGEMENT on what it implies].
 
 **Resolved** means every `FAIL_TO_PASS` test passes and every
 `PASS_TO_PASS` test still passes, under the official harness. Patches
@@ -184,13 +212,13 @@ stays in git history.
 
 ## Roadmap
 
-- [ ] Evaluation harness scores a gold patch on the dev split
-- [ ] Run records written as JSON from the first run
-- [ ] Provider adapter with prompt caching, verified against API response fields
-- [ ] Per-job spend ceiling enforced in code
-- [ ] Measured cost of one real task
-- [ ] Single agent across the 5-task dev split
-- [ ] Minimal single-agent baseline on the same tasks
+- [x] Evaluation harness scores a gold patch on the dev split — [entry #2](results.md#entry-2--dev-split-gold-empty-and-no-op-patches-week-1-steps-34), in CI [entry #4](results.md#entry-4--first-ci-benchmark-gold-on-the-dev-split-week-1-step-6)
+- [x] Run records written as JSON from the first run — [ADR-0011](decisions.md#adr-0011-run-record-format-and-runner-design), [entry #3](results.md#entry-3--runner-acceptance-test-first-results-computed-from-run-records)
+- [x] Provider adapter with prompt caching, verified against API response fields — [ADR-0013](decisions.md#adr-0013-provider-adapters-over-raw-http-two-costs-per-call), [ADR-0016](decisions.md#adr-0016-verifying-cache-hits-and-a-cache-busted-condition-week-3), [entry #9](results.md#entry-9--caching-measured-cold-vs-warm-three-repeats-week-3)
+- [x] Per-job spend ceiling enforced in code — [ADR-0014](decisions.md#adr-0014-the-spend-ceiling-as-built), [entry #6](results.md#entry-6--spend-ceiling-live-a-deliberately-broken-loop-week-2-step-2)
+- [x] Measured cost of one real task — [entry #7](results.md#entry-7--first-agent-runs-dev-task-1-end-to-end-week-2-steps-34)
+- [x] Single agent across the 5-task dev split — [ADR-0015](decisions.md#adr-0015-the-simple-agent-week-2), [entry #9](results.md#entry-9--caching-measured-cold-vs-warm-three-repeats-week-3)
+- [x] Minimal single-agent baseline on the same tasks — [ADR-0018](decisions.md#adr-0018-mini-swe-agent-baseline--stock-mini-our-transport), [entry #10](results.md#entry-10--agentmini-against-agentsimple-on-the-dev-split-week-4)
 - [ ] Five-agent pipeline with the coder–reviewer loop
 - [ ] Offline per-role benchmarks
 - [ ] Headline comparison: per-role team vs one model everywhere
